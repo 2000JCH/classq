@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p C:/all/classq/classq-backend)",
+      "Bash(mkdir -p C:/all/classq/classq-frontend)",
+      "Bash(mv src *)",
+      "Bash(mv build.gradle classq-backend/build.gradle)",
+      "Bash(mv settings.gradle classq-backend/settings.gradle)",
+      "Bash(mv gradlew *)",
+      "Bash(mv gradlew.bat classq-backend/gradlew.bat)"
+    ]
+  }
+}
