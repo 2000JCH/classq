@@ -1,0 +1,38 @@
+language: "ko-KR"
+
+reviews:
+  profile: chill #assertive, as-is
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  sequence_diagrams: false
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - develop
+  instructions: |
+    모든 리뷰 코멘트와 요약은 반드시 한국어로 작성해주세요.
+    릴리스 노트 섹션명은 반드시 다음 이름을 사용하세요:
+    - New Features → 새로운 기능
+    - Improvements → 개선 사항
+    - Bug Fixes → 버그 수정
+    - Documentation → 문서
+    - Chores → 기타
+    PR 설명(description)을 작성할 때는 다음 규칙을 따르세요:
+    - fix 또는 bugfix 관련 변경: "어떤 문제가 있었는지"와 "어떻게 수정했는지"를 명확히 서술
+    - refactor 관련 변경: "기존 코드의 문제점"과 "개선한 방식"을 명확히 서술
+    - feat 관련 변경: 추가된 기능과 그 목적을 서술
+
+code_generation:
+  docstrings:
+    language: "ko-KR"
+
+chat:
+  auto_reply: true
+
