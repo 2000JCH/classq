@@ -4,18 +4,18 @@
 
 ## Phase 1. 프로젝트 기반 설정
 
-- [ ] 패키지 구조 구성 (`domain`, `infra`, `api`, `global` 등)
-- [ ] `application.yml` 설정 (DB, Redis, Kafka, JWT)
+- [x] 패키지 구조 구성 (`domain`, `infra`, `api`, `global` 등)
+- [x] `application.yml` 설정 (DB, Redis, Kafka, JWT)
 - [ ] DB 스키마 생성 (9개 테이블)
   - account, student, professor, department
   - course, course_schedule
   - enrollment, waitlist, notification
-- [ ] JPA Entity 9개 작성
+- [x] JPA Entity 9개 작성
 - [ ] Spring Security 기본 설정 (SecurityFilterChain)
 - [ ] JWT 유틸 구현 (발급 / 검증 / 파싱)
 - [ ] JWT 인증 필터 구현 (JwtAuthenticationFilter)
-- [ ] 공통 에러 응답 형식 구현 (`code`, `message`)
-- [ ] 글로벌 예외 핸들러 구현 (GlobalExceptionHandler)
+- [x] 공통 에러 응답 형식 구현 (`code`, `message`)
+- [x] 글로벌 예외 핸들러 구현 (GlobalExceptionHandler)
 
 ---
 
