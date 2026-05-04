@@ -21,10 +21,10 @@
 
 ## Phase 2. 인증 (Auth)
 
-- [ ] POST `/api/v1/auth/signup` — 회원가입
-- [ ] POST `/api/v1/auth/login` — 로그인 (access token + refresh token 발급, Redis SET)
-- [ ] POST `/api/v1/auth/logout` — 로그아웃 (Redis refresh token DEL)
-- [ ] POST `/api/v1/auth/refresh` — access token 재발급 (Redis GET으로 유효성 검증)
+- [x] POST `/api/v1/auth/signup` — 회원가입
+- [x] POST `/api/v1/auth/login` — 로그인 (access token + refresh token 발급, Redis SET)
+- [x] POST `/api/v1/auth/logout` — 로그아웃 (Redis refresh token DEL)
+- [x] POST `/api/v1/auth/refresh` — access token 재발급 (Redis GET으로 유효성 검증)
 
 ---
 
