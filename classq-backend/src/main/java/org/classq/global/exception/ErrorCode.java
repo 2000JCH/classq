@@ -2,15 +2,17 @@ package org.classq.global.exception;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 
 @Getter
 @RequiredArgsConstructor
 public enum ErrorCode {
 
     //인증
+    EMAIL_ALREADY_EXISTS(409, "이미 존재하는 이메일입니다."),
     INVALID_TOKEN(401, "유효하지 않은 토큰입니다."),
     TOKEN_EXPIRED(401, "만료된 토큰입니다."),
-    UNAUTHORIZED(401, "인증이 필요합니다."),
+    UNAUTHORIZED(401, "이메일 또는 비밀번호가 올바르지 않습니다."),
     FORBIDDEN(403, "접근 권한이 없습니다."),
 
     //서버

@@ -40,7 +40,7 @@ public class JwtFilter extends OncePerRequestFilter {
     }
 
     private String resolveToken(HttpServletRequest request) {
-        String bearer = request.getHeader("Authorization"); //http헤더에는 Authorization 제외한 다양한 값이 있다. (Content-Type, Host, Cookie등)
+        String bearer = request.getHeader("Authorization"); //http헤더에는 Authorization 포함한 다양한 값이 있다. (Content-Type, Host, Cookie등)
         if (bearer != null && bearer.startsWith("Bearer ")) {
             return bearer.substring(7); //"Bearer " 접두사를 제거하고 순수한 jwt 값만 추출
         }

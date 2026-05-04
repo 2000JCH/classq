@@ -15,17 +15,20 @@ public class JwtUtil {
 
     private final SecretKey secretKey;  // 마스터 키
     private final long accessTokenExpiration;   //만료 시간
+    private final long refreshTokenExpiration;
 
     public JwtUtil(
             @Value("${jwt.secret}") String secret,
-            @Value("${jwt.access-token-expiration}") long accessTokenExpiration
+            @Value("${jwt.access-token-expiration}") long accessTokenExpiration,
+            @Value("${jwt.refresh-token-expiration}") long refreshTokenExpiration
     ) {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.accessTokenExpiration = accessTokenExpiration;
+        this.refreshTokenExpiration = refreshTokenExpiration;
     }
 
-    // 토큰 생성
-    public String generateToken(Long accountId, String role) {
+    // access token 생성
+    public String createAccessToken(Long accountId, String role) {
         Date now = new Date();
         return Jwts.builder()
                 .subject(String.valueOf(accountId)) // 유저 ID
@@ -34,6 +37,17 @@ public class JwtUtil {
                 .expiration(new Date(now.getTime() + accessTokenExpiration))    // 만료 시간
                 .signWith(secretKey)    //위의 발급 받을것들을 secretKey를 이용해서 해싱
                 .compact(); // 압축
+    }
+
+    // refresh token 생성
+    public String createRefreshToken(Long accountId) {
+        Date now = new Date();
+        return Jwts.builder()
+                .subject(String.valueOf(accountId))
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + refreshTokenExpiration))
+                .signWith(secretKey)
+                .compact();
     }
 
     //유효성 검증 (클라이언트가 가져온 토큰이 진짜인지, 유효기간이 지나진 않았는지 확인)
