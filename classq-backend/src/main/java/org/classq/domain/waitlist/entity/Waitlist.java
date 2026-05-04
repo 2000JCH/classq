@@ -30,7 +30,7 @@ public class Waitlist extends BaseEntity {
     private Course course;
 
     //대기 순번
-    @Column(nullable = false)
+    @Column(name = "wait_rank", nullable = false)
     private int rank;
 
     //대기 상태
