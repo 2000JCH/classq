@@ -5,6 +5,7 @@ import org.classq.domain.account.dto.LoginRequestDto;
 import org.classq.domain.account.dto.SignupRequestDto;
 import org.classq.domain.account.dto.TokenResponseDto;
 import org.classq.domain.account.entity.Account;
+import org.classq.domain.account.entity.Role;
 import org.classq.domain.account.repository.AccountRepository;
 import org.classq.global.auth.jwt.JwtUtil;
 import org.classq.global.exception.BusinessException;
@@ -26,6 +27,10 @@ public class AccountService {
 
     //회원가입
     public void signup(SignupRequestDto request) {
+
+        if (request.getRole() == Role.ADMIN) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
 
         //중복체크
         if (accountRepository.findByEmail(request.getEmail()).isPresent()) {
