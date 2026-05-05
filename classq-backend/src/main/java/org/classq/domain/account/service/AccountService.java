@@ -62,7 +62,7 @@ public class AccountService {
         redisTemplate.opsForValue().set(
                 "refresh:token:" +account.getId(),
                 refreshToken,
-                7, TimeUnit.DAYS
+                jwtUtil.getRefreshTokenExpiration(), TimeUnit.MILLISECONDS
         );
 
         return new TokenResponseDto(accessToken, refreshToken);

@@ -27,6 +27,10 @@ public class JwtUtil {
         this.refreshTokenExpiration = refreshTokenExpiration;
     }
 
+    public long getRefreshTokenExpiration(){
+        return refreshTokenExpiration;
+    }
+
     // access token 생성
     public String createAccessToken(Long accountId, String role) {
         Date now = new Date();
