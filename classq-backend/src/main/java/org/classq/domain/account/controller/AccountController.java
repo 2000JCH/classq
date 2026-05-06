@@ -6,6 +6,7 @@ import org.classq.domain.account.dto.LoginRequestDto;
 import org.classq.domain.account.dto.SignupRequestDto;
 import org.classq.domain.account.dto.TokenResponseDto;
 import org.classq.domain.account.service.AccountService;
+import org.classq.global.auth.jwt.JwtUtil;
 import org.classq.global.exception.BusinessException;
 import org.classq.global.exception.ErrorCode;
 import org.springframework.http.HttpStatus;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AccountController {
 
     private final AccountService accountService;
+    private final JwtUtil jwtUtil;
 
     //회원가입
     @PostMapping("/signup")
@@ -58,10 +60,10 @@ public class AccountController {
      * **/
     @PostMapping("/refresh")
     public ResponseEntity<TokenResponseDto> refresh(@RequestHeader("Authorization") String bearer) {
-        if (!bearer.startsWith("Bearer ")) {
+        String refreshToken = jwtUtil.extractToken(bearer);
+        if (refreshToken == null) {
             throw new BusinessException(ErrorCode.INVALID_TOKEN);
         }
-        String refreshToken = bearer.substring(7);  //앞 7글자 제거
         return ResponseEntity.ok(accountService.refresh(refreshToken));
     }
 }

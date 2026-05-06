@@ -87,11 +87,15 @@ public class JwtUtil {
 
     // 받은 토큰 타입 종류 확인
     private String getTokenType(String token) {
-        return Jwts.parser()
-                .verifyWith(secretKey).build()
-                .parseSignedClaims(token)
-                .getPayload()
-                .get("typ", String.class);  //String.class 값만 반환 -> 반환값 : access, refresh
+        try {
+            return Jwts.parser()
+                    .verifyWith(secretKey).build()
+                    .parseSignedClaims(token)
+                    .getPayload()
+                    .get("typ", String.class);  //String.class 값만 반환 -> 반환값 : access, refresh
+        } catch (JwtException | IllegalArgumentException e) {
+            return null;
+        }
     }
 
     public boolean isAccessToken(String token) {
@@ -100,5 +104,13 @@ public class JwtUtil {
 
     public boolean isRefreshToken(String token) {
         return "refresh".equals(getTokenType(token));
+    }
+
+    // Bearer 추출 메소드
+    public String extractToken(String bearer) {
+        if (bearer != null && bearer.startsWith("Bearer ")) {
+            return bearer.substring(7);
+        }
+        return null;
     }
 }

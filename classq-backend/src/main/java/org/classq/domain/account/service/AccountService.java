@@ -35,24 +35,24 @@ public class AccountService {
         //중복체크
         if (accountRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
-        } else {
-            Account account = Account.builder()
-                    .email(request.getEmail())
-                    .password(passwordEncoder.encode(request.getPassword()))
-                    .role(request.getRole())
-                    .build();
-            accountRepository.save(account);
         }
+
+        Account account = Account.builder()
+                .email(request.getEmail())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .role(request.getRole())
+                .build();
+        accountRepository.save(account);
     }
 
     //로그인
     public TokenResponseDto login(LoginRequestDto request) {
 
         Account account = accountRepository.findByEmail(request.getEmail())
-                .orElseThrow(()->new BusinessException(ErrorCode.UNAUTHORIZED));
+                .orElseThrow(()->new BusinessException(ErrorCode.LOGIN_FAILED));
 
         if (!passwordEncoder.matches(request.getPassword(), account.getPassword())) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+            throw new BusinessException(ErrorCode.LOGIN_FAILED);
         }
 
         String accessToken = jwtUtil.createAccessToken(account.getId(), account.getRole().name());
