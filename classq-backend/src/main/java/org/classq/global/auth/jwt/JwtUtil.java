@@ -36,6 +36,7 @@ public class JwtUtil {
         Date now = new Date();
         return Jwts.builder()
                 .subject(String.valueOf(accountId)) // 유저 ID
+                .claim("typ", "access")
                 .claim("role", role)    // 커스텀 데이터 (권한 삽입)
                 .issuedAt(now)  // 발급 시간
                 .expiration(new Date(now.getTime() + accessTokenExpiration))    // 만료 시간
@@ -48,6 +49,7 @@ public class JwtUtil {
         Date now = new Date();
         return Jwts.builder()
                 .subject(String.valueOf(accountId))
+                .claim("typ", "refresh")
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + refreshTokenExpiration))
                 .signWith(secretKey)
@@ -81,5 +83,22 @@ public class JwtUtil {
                 .parseSignedClaims(token)
                 .getPayload()
                 .get("role", String.class);
+    }
+
+    // 받은 토큰 타입 종류 확인
+    private String getTokenType(String token) {
+        return Jwts.parser()
+                .verifyWith(secretKey).build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .get("typ", String.class);  //String.class 값만 반환 -> 반환값 : access, refresh
+    }
+
+    public boolean isAccessToken(String token) {
+        return "access".equals(getTokenType(token));
+    }
+
+    public boolean isRefreshToken(String token) {
+        return "refresh".equals(getTokenType(token));
     }
 }

@@ -24,7 +24,7 @@ public class JwtFilter extends OncePerRequestFilter {
 
         String token = resolveToken(request);
 
-        if (token != null && jwtUtil.validateToken(token)) {
+        if (token != null && jwtUtil.validateToken(token) && jwtUtil.isAccessToken(token)) {
             Long accountId = jwtUtil.getAccountId(token);
             String role = jwtUtil.getRole(token);
 

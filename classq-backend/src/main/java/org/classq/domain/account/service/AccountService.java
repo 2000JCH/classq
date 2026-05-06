@@ -75,6 +75,9 @@ public class AccountService {
 
     //액새스 토큰 재발급 (리프레시 토큰을 이용해서 새로운 액세스 토큰 재발급)
     public TokenResponseDto refresh(String refreshToken) {
+        if (!jwtUtil.isRefreshToken(refreshToken)) {
+            throw new BusinessException(ErrorCode.INVALID_TOKEN);
+        }
         Long accountId = jwtUtil.getAccountId(refreshToken);
 
         String saved = redisTemplate.opsForValue().get("refresh:token:" + accountId);
