@@ -13,6 +13,7 @@ import org.classq.global.exception.ErrorCode;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.concurrent.TimeUnit;
 
@@ -26,6 +27,7 @@ public class AccountService {
     private final RedisTemplate<String, String> redisTemplate;
 
     //회원가입
+    @Transactional
     public void signup(SignupRequestDto request) {
 
         if (request.getRole() == Role.ADMIN) {
@@ -46,6 +48,7 @@ public class AccountService {
     }
 
     //로그인
+    @Transactional
     public TokenResponseDto login(LoginRequestDto request) {
 
         Account account = accountRepository.findByEmail(request.getEmail())
@@ -74,8 +77,9 @@ public class AccountService {
     }
 
     //액새스 토큰 재발급 (리프레시 토큰을 이용해서 새로운 액세스 토큰 재발급)
+    @Transactional
     public TokenResponseDto refresh(String refreshToken) {
-        if (!jwtUtil.isRefreshToken(refreshToken)) {
+        if (!jwtUtil.validateToken(refreshToken) || !jwtUtil.isRefreshToken(refreshToken)) {
             throw new BusinessException(ErrorCode.INVALID_TOKEN);
         }
         Long accountId = jwtUtil.getAccountId(refreshToken);

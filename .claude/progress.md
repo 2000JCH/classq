@@ -25,6 +25,7 @@
 - [x] POST `/api/v1/auth/login` — 로그인 (access token + refresh token 발급, Redis SET)
 - [x] POST `/api/v1/auth/logout` — 로그아웃 (Redis refresh token DEL)
 - [x] POST `/api/v1/auth/refresh` — access token 재발급 (Redis GET으로 유효성 검증)
+- [x] JWT 토큰 타입 클레임 추가 — access/refresh 토큰 구별 검증 (JwtUtil, JwtFilter, AccountService)
 
 ---
 
