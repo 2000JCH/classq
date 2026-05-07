@@ -31,4 +31,9 @@ public class Student extends BaseEntity {
     @JoinColumn(name = "department_id", nullable = false)
     private Department department;
 
+    // 내(학생) 정보 수정
+    public void update(String name, Integer grade) {
+        this.name = name;
+        this.grade = grade;
+    }
 }
