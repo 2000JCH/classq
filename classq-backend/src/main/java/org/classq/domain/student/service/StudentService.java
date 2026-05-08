@@ -26,17 +26,25 @@ public class StudentService {
 
     // 내(학생) 정보 수정
     @Transactional
-    public StudentResponseDto updateMe(Long accountId, StudentRequestDto studentRequest) {
+    public StudentResponseDto updateMe(Long accountId, StudentRequestDto request) {
         Student student = studentRepository.findByAccountIdAndDeletedAtIsNull(accountId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
 
         //값을 안 보내면 기존 값 유지
         student.update(
-                studentRequest.getName() != null ? studentRequest.getName() : student.getName(),
-                studentRequest.getGrade() != null ? studentRequest.getGrade() : student.getGrade()
+                request.getName() != null ? request.getName() : student.getName(),
+                request.getGrade() != null ? request.getGrade() : student.getGrade()
         );
-
         return new StudentResponseDto(student.getAccount().getEmail(), student.getName(), student.getGrade());
     }
 
+    // 회원 탈퇴
+    @Transactional
+    public void deleteMe(Long accountId) {
+        Student student = studentRepository.findByAccountIdAndDeletedAtIsNull(accountId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
+
+        student.delete();
+        student.getAccount().delete();
+    }
 }

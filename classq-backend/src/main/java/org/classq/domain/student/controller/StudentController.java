@@ -26,4 +26,11 @@ public class StudentController {
     public ResponseEntity<StudentResponseDto> updateMe(@AuthenticationPrincipal Long accountId, @RequestBody StudentRequestDto request) {
         return ResponseEntity.ok(studentService.updateMe(accountId, request));
     }
+
+    // 회원 탈퇴
+    @DeleteMapping("/me")
+    public ResponseEntity<Void> deleteMe(@AuthenticationPrincipal Long accountId) {
+        studentService.deleteMe(accountId);
+        return ResponseEntity.noContent().build();
+    }
 }
