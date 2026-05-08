@@ -31,8 +31,8 @@
 
 ## Phase 3. 사용자 · 학과
 
-- [ ] GET `/api/v1/students/me` — 내 정보 조회
-- [ ] PUT `/api/v1/students/me` — 내 정보 수정
+- [x] GET `/api/v1/students/me` — 내 정보 조회
+- [x] PUT `/api/v1/students/me` — 내 정보 수정
 - [ ] DELETE `/api/v1/students/me` — 회원 탈퇴 (soft delete)
 - [ ] GET `/api/v1/professors/me` — 내 정보 조회
 - [ ] PUT `/api/v1/professors/me` — 내 정보 수정
