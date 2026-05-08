@@ -1,6 +1,7 @@
 package org.classq.domain.professor.service;
 
 import lombok.RequiredArgsConstructor;
+import org.classq.domain.professor.dto.ProfessorRequestDto;
 import org.classq.domain.professor.dto.ProfessorResponseDto;
 import org.classq.domain.professor.entity.Professor;
 import org.classq.domain.professor.repository.ProfessorRepository;
@@ -24,5 +25,19 @@ public class ProfessorService {
         return new ProfessorResponseDto(professor.getName(), professor.getAccount().getEmail(),
                 professor.getDepartment().getName()
         );
+    }
+
+    //내 정보 수정
+    @Transactional
+    public ProfessorResponseDto updateMe(Long accountId, ProfessorRequestDto request) {
+        Professor professor = professorRepository.findByAccountIdAndDeletedAtIsNull(accountId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROFESSOR_NOT_FOUND));
+
+        professor.update(
+                request.getName() != null ? request.getName() : professor.getName()
+        );
+
+        return new ProfessorResponseDto(professor.getName(), professor.getAccount().getEmail(),
+                professor.getDepartment().getName());
     }
 }
