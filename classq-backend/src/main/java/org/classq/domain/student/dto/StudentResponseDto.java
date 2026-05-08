@@ -11,5 +11,5 @@ public class StudentResponseDto {
     private String email;
     private String name;
     private int grade;
-
+    private String departmentName;
 }

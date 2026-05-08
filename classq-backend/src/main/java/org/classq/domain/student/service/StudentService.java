@@ -21,7 +21,8 @@ public class StudentService {
     public StudentResponseDto getMe(Long accountId) {
         Student student = studentRepository.findByAccountIdAndDeletedAtIsNull(accountId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
-        return new StudentResponseDto(student.getAccount().getEmail(), student.getName(), student.getGrade());
+        return new StudentResponseDto(student.getAccount().getEmail(), student.getName(),
+                student.getGrade(), student.getDepartment().getName());
     }
 
     // 내(학생) 정보 수정
@@ -35,7 +36,9 @@ public class StudentService {
                 request.getName() != null ? request.getName() : student.getName(),
                 request.getGrade() != null ? request.getGrade() : student.getGrade()
         );
-        return new StudentResponseDto(student.getAccount().getEmail(), student.getName(), student.getGrade());
+        return new StudentResponseDto(student.getAccount().getEmail(), student.getName(),
+                student.getGrade(), student.getDepartment().getName()
+        );
     }
 
     // 회원 탈퇴
