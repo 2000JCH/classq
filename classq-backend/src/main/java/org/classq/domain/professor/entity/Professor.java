@@ -28,4 +28,8 @@ public class Professor extends BaseEntity  {
 
     @Column(nullable = false, length = 50)
     private String name;
+
+    public void update(String name) {
+        this.name = name;
+    }
 }
