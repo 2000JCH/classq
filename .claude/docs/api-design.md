@@ -191,13 +191,21 @@ Base URL은 `/api/v1`로 통일한다. 모든 인증이 필요한 요청은 `Aut
 }
 ```
 
-| 코드 | 설명 |
-|---|---|
-| ENROLLMENT_CLOSED | 수강 자리 마감 |
-| WAITLIST_CLOSED | 대기 자리 마감 |
-| ENROLLMENT_LOCKED | 대기자 처리 중 |
-| CREDIT_EXCEEDED | 학점 초과 |
-| TIME_CONFLICT | 시간표 중복 |
-| DUPLICATE_ENROLLMENT | 이미 신청한 강의 |
-| UNAUTHORIZED | 인증 필요 |
-| FORBIDDEN | 권한 없음 |
+| 코드 | HTTP | 설명 |
+|---|---|---|
+| EMAIL_ALREADY_EXISTS | 409 | 이미 존재하는 이메일로 회원가입 시도 |
+| INVALID_TOKEN | 401 | 위변조·형식 오류·잘못된 타입의 토큰 |
+| TOKEN_EXPIRED | 401 | 만료된 토큰 (enum 정의됨, 현재 INVALID_TOKEN으로 통합 처리) |
+| UNAUTHORIZED | 401 | Redis 토큰 불일치, 계정 미존재 등 인증 실패 |
+| LOGIN_FAILED | 401 | 이메일 또는 비밀번호 불일치 |
+| FORBIDDEN | 403 | 권한 없는 접근 (ADMIN 역할 직접 할당 시도 등) |
+| STUDENT_NOT_FOUND | 404 | 학생 정보 없음 |
+| PROFESSOR_NOT_FOUND | 404 | 교수 정보 없음 |
+| ENROLLMENT_CLOSED | 409 | 수강 자리 마감 |
+| WAITLIST_CLOSED | 409 | 대기 자리 마감 |
+| DUPLICATE_ENROLLMENT | 409 | 이미 신청한 강의 |
+| INVALID_INPUT | 400 | 요청 입력값 유효성 검증 실패 |
+| CREDIT_EXCEEDED | 400 | 학점 초과 |
+| TIME_CONFLICT | 400 | 시간표 중복 |
+| ENROLLMENT_LOCKED | 403 | 대기자 처리 중 |
+| INTERNAL_SERVER_ERROR | 500 | 서버 내부 오류 |
