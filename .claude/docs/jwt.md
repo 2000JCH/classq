@@ -163,7 +163,8 @@ Redis 장애로 key가 없을 경우 재로그인을 요청한다.
 
 | 코드 | HTTP | 상황 |
 |---|---|---|
-| `INVALID_TOKEN` | 401 | 위변조·만료·형식 오류 토큰, 잘못된 토큰 타입 |
+| `INVALID_TOKEN` | 401 | 위변조·형식 오류·잘못된 토큰 타입 (만료 포함, TOKEN_EXPIRED와 통합 처리) |
+| `TOKEN_EXPIRED` | 401 | 만료된 토큰 — enum 정의됨, 현재는 INVALID_TOKEN으로 통합 반환 |
 | `UNAUTHORIZED` | 401 | Redis 토큰 불일치, 계정 미존재 |
 | `LOGIN_FAILED` | 401 | 이메일 또는 비밀번호 불일치 |
 | `FORBIDDEN` | 403 | 권한 없는 접근 (ADMIN 역할 직접 할당 시도 등) |
