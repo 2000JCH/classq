@@ -1,19 +1,27 @@
 package org.classq.domain.course.service;
 
 import lombok.RequiredArgsConstructor;
+import org.classq.domain.course.dto.CourseCreateRequestDto;
 import org.classq.domain.course.dto.CourseDetailDto;
 import org.classq.domain.course.dto.CourseDto;
 import org.classq.domain.course.entity.Course;
+import org.classq.domain.course.entity.CourseSchedule;
 import org.classq.domain.course.entity.enums.ClassMode;
 import org.classq.domain.course.entity.enums.ClassType;
 import org.classq.domain.course.entity.enums.CourseStatus;
 import org.classq.domain.course.entity.enums.CourseType;
 import org.classq.domain.course.repository.CourseRepository;
+import org.classq.domain.course.repository.CourseScheduleRepository;
+import org.classq.domain.department.entity.Department;
+import org.classq.domain.department.repository.DepartmentRepository;
+import org.classq.domain.professor.entity.Professor;
+import org.classq.domain.professor.repository.ProfessorRepository;
 import org.classq.global.exception.BusinessException;
 import org.classq.global.exception.ErrorCode;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,8 +30,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class CourseService {
 
     private final CourseRepository courseRepository;
+    private final CourseScheduleRepository courseScheduleRepository;
+    private final ProfessorRepository professorRepository;
+    private final DepartmentRepository departmentRepository;
+    private final RedisTemplate<String, String> redisTemplate;
 
-    // 강의 조회
+    // 강의 목록 조회
     @Transactional(readOnly = true)
     public Page<CourseDto> getCourses(CourseType courseType, ClassType classType, ClassMode classMode, Long departmentId, Pageable pageable) {
         Specification<Course> spec = notDeleted()
@@ -58,6 +70,52 @@ public class CourseService {
                 course.getMaxGrade(),
                 course.getCourseStatus()
         );
+    }
+
+    // 강의 등록
+    @Transactional
+    public Long createCourse(Long accountId, CourseCreateRequestDto request) {
+        Professor professor = professorRepository.findByAccountIdAndDeletedAtIsNull(accountId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROFESSOR_NOT_FOUND));
+
+        Department department = null;
+        if (request.getDepartmentId() != null) {
+            department = departmentRepository.findById(request.getDepartmentId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
+        }
+
+        Course course = Course.builder()
+                .professor(professor)
+                .department(department)
+                .name(request.getName())
+                .courseType(request.getCourseType())
+                .classType(request.getClassType())
+                .classMode(request.getClassMode())
+                .credits(request.getCredits())
+                .capacity(request.getCapacity())
+                .waitlistLimit(request.getWaitlistLimit())
+                .minGrade(request.getMinGrade())
+                .maxGrade(request.getMaxGrade())
+                .build();
+
+        courseRepository.save(course);
+
+        if (request.getSchedules() != null) {
+            for (CourseCreateRequestDto.ScheduleRequest s : request.getSchedules()) {
+                CourseSchedule schedule = CourseSchedule.builder()
+                        .course(course)
+                        .courseScheduleDay(s.getDay())
+                        .startTime(s.getStartTime())
+                        .endTime(s.getEndTime())
+                        .build();
+                courseScheduleRepository.save(schedule);
+            }
+        }
+
+        redisTemplate.opsForValue().set("enrollment:course:" + course.getId(), String.valueOf(request.getCapacity()));
+        redisTemplate.opsForValue().set("waitlist:course:" + course.getId(), String.valueOf(request.getWaitlistLimit()));
+
+        return course.getId();
     }
 
     private CourseDto toDto(Course course) {
