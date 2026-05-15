@@ -68,4 +68,14 @@ public class Course extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private CourseStatus courseStatus = CourseStatus.ACTIVE;
+
+    public void update(String name, ClassMode classMode, Department department, int capacity, int waitlistLimit, Integer minGrade, Integer maxGrade) {
+        this.name = name;
+        this.classMode = classMode;
+        this.department = department;
+        this.capacity = capacity;
+        this.waitlistLimit = waitlistLimit;
+        this.minGrade = minGrade;
+        this.maxGrade = maxGrade;
+    }
 }

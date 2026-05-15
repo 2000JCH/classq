@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.classq.domain.course.dto.CourseCreateRequestDto;
 import org.classq.domain.course.dto.CourseDetailDto;
 import org.classq.domain.course.dto.CourseDto;
+import org.classq.domain.course.dto.CourseUpdateRequestDto;
 import org.classq.domain.course.entity.Course;
 import org.classq.domain.course.entity.CourseSchedule;
 import org.classq.domain.course.entity.enums.ClassMode;
@@ -116,6 +117,29 @@ public class CourseService {
         redisTemplate.opsForValue().set("waitlist:course:" + course.getId(), String.valueOf(request.getWaitlistLimit()));
 
         return course.getId();
+    }
+
+    // 강의 수정
+    @Transactional
+    public void updateCourse(Long accountId, Long courseId, CourseUpdateRequestDto request) {
+        Professor professor = professorRepository.findByAccountIdAndDeletedAtIsNull(accountId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROFESSOR_NOT_FOUND));
+
+        Course course = courseRepository.findById(courseId)
+                .filter(c -> c.getDeletedAt() == null)
+                .orElseThrow(() -> new BusinessException(ErrorCode.COURSE_NOT_FOUND));
+
+        if (!course.getProfessor().getId().equals(professor.getId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        Department department = null;
+        if (request.getDepartmentId() != null) {
+            department = departmentRepository.findById(request.getDepartmentId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
+        }
+
+        course.update(request.getName(), request.getClassMode(), department, request.getCapacity(), request.getWaitlistLimit(), request.getMinGrade(), request.getMaxGrade());
     }
 
     private CourseDto toDto(Course course) {
