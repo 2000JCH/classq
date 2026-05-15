@@ -142,6 +142,23 @@ public class CourseService {
         course.update(request.getName(), request.getClassMode(), department, request.getCapacity(), request.getWaitlistLimit(), request.getMinGrade(), request.getMaxGrade());
     }
 
+    // 강의 폐강
+    @Transactional
+    public void closeCourse(Long accountId, Long courseId) {
+        Professor professor = professorRepository.findByAccountIdAndDeletedAtIsNull(accountId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PROFESSOR_NOT_FOUND));
+
+        Course course = courseRepository.findById(courseId)
+                .filter(c -> c.getDeletedAt() == null)
+                .orElseThrow(() -> new BusinessException(ErrorCode.COURSE_NOT_FOUND));
+
+        if (!course.getProfessor().getId().equals(professor.getId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        course.close();
+    }
+
     private CourseDto toDto(Course course) {
         return new CourseDto(
                 course.getId(),

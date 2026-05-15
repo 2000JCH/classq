@@ -64,4 +64,11 @@ public class CourseController {
         return ResponseEntity.ok().build();
     }
 
+    // 강의 폐강
+    @DeleteMapping("/{courseId}")
+    public ResponseEntity<Void> closeCourse(@AuthenticationPrincipal Long accountId, @PathVariable Long courseId) {
+        courseService.closeCourse(accountId, courseId);
+        return ResponseEntity.ok().build();
+    }
+
 }

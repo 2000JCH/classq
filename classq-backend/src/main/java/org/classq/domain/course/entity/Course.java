@@ -78,4 +78,8 @@ public class Course extends BaseEntity {
         this.minGrade = minGrade;
         this.maxGrade = maxGrade;
     }
+
+    public void close() {
+        this.courseStatus = CourseStatus.CLOSED;
+    }
 }
