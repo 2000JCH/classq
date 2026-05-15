@@ -1,5 +1,6 @@
 package org.classq.domain.course.controller;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.classq.domain.course.dto.CourseCreateRequestDto;
 import org.classq.domain.course.dto.CourseDetailDto;
@@ -59,7 +60,7 @@ public class CourseController {
 
     // 강의 수정
     @PutMapping("/{courseId}")
-    public ResponseEntity<Void> updateCourse(@AuthenticationPrincipal Long accountId, @PathVariable Long courseId, @RequestBody CourseUpdateRequestDto request) {
+    public ResponseEntity<Void> updateCourse(@AuthenticationPrincipal Long accountId, @PathVariable Long courseId, @Valid @RequestBody CourseUpdateRequestDto request) {
         courseService.updateCourse(accountId, courseId, request);
         return ResponseEntity.ok().build();
     }
