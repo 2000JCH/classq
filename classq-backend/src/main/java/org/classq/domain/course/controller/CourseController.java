@@ -1,10 +1,12 @@
 package org.classq.domain.course.controller;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.classq.domain.course.dto.CourseCreateRequestDto;
 import org.classq.domain.course.dto.CourseDetailDto;
 import org.classq.domain.course.dto.CourseDto;
 import org.classq.domain.course.dto.CourseScheduleDto;
+import org.classq.domain.course.dto.CourseUpdateRequestDto;
 import org.classq.domain.course.entity.enums.ClassMode;
 import org.classq.domain.course.entity.enums.ClassType;
 import org.classq.domain.course.entity.enums.CourseType;
@@ -54,6 +56,20 @@ public class CourseController {
     @PostMapping
     public ResponseEntity<Long> createCourse(@AuthenticationPrincipal Long accountId, @RequestBody CourseCreateRequestDto request) {
         return ResponseEntity.status(201).body(courseService.createCourse(accountId, request));
+    }
+
+    // 강의 수정
+    @PutMapping("/{courseId}")
+    public ResponseEntity<Void> updateCourse(@AuthenticationPrincipal Long accountId, @PathVariable Long courseId, @Valid @RequestBody CourseUpdateRequestDto request) {
+        courseService.updateCourse(accountId, courseId, request);
+        return ResponseEntity.ok().build();
+    }
+
+    // 강의 폐강
+    @DeleteMapping("/{courseId}")
+    public ResponseEntity<Void> closeCourse(@AuthenticationPrincipal Long accountId, @PathVariable Long courseId) {
+        courseService.closeCourse(accountId, courseId);
+        return ResponseEntity.ok().build();
     }
 
 }
