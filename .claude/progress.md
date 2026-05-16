@@ -33,35 +33,43 @@
 
 - [x] GET `/api/v1/students/me` — 내 정보 조회
 - [x] PUT `/api/v1/students/me` — 내 정보 수정
-- [ ] DELETE `/api/v1/students/me` — 회원 탈퇴 (soft delete)
-- [ ] GET `/api/v1/professors/me` — 내 정보 조회
-- [ ] PUT `/api/v1/professors/me` — 내 정보 수정
-- [ ] GET `/api/v1/departments` — 전체 학과 목록 조회
+- [x] DELETE `/api/v1/students/me` — 회원 탈퇴 (soft delete)
+- [x] GET `/api/v1/professors/me` — 내 정보 조회
+- [x] PUT `/api/v1/professors/me` — 내 정보 수정
+- [x] GET `/api/v1/departments` — 전체 학과 목록 조회
 
 ---
 
 ## Phase 4. 강의 (Course)
 
-- [ ] GET `/api/v1/courses` — 강의 목록 조회 (courseType / classType / classMode / departmentId 필터)
-- [ ] GET `/api/v1/courses/{courseId}` — 강의 상세 조회
-- [ ] GET `/api/v1/courses/{courseId}/schedules` — 강의 시간표 조회
-- [ ] POST `/api/v1/courses` — 강의 등록
+- [x] GET `/api/v1/courses` — 강의 목록 조회 (courseType / classType / classMode / departmentId 필터)
+- [x] GET `/api/v1/courses/{courseId}` — 강의 상세 조회
+- [x] GET `/api/v1/courses/{courseId}/schedules` — 강의 시간표 조회
+- [x] POST `/api/v1/courses` — 강의 등록
   - course + course_schedule RDS INSERT
   - Redis `enrollment:course:{id}` = capacity 초기화
   - Redis `waitlist:course:{id}` = waitlist_limit 초기화
-- [ ] PUT `/api/v1/courses/{courseId}` — 강의 수정 (Debezium이 감지하여 Kafka 발행)
-- [ ] DELETE `/api/v1/courses/{courseId}` — 강의 폐강 (status = CLOSED)
+- [x] PUT `/api/v1/courses/{courseId}` — 강의 수정 (Debezium이 감지하여 Kafka 발행)
+- [x] DELETE `/api/v1/courses/{courseId}` — 강의 폐강 (status = CLOSED)
 
 ---
 
 ## Phase 5. Kafka · Debezium 설정
 
-- [ ] Kafka 토픽 생성
+> **시작 전 참고사항**
+> - Kafka 완전 처음 → 토픽/파티션/offset/Consumer Group/acks 개념부터 잡고 시작할 것
+> - Docker 익숙함 → docker-compose로 인프라 한 번에 올리는 방식으로 진행
+> - 띄워야 할 컨테이너: Zookeeper → Kafka → Kafka Connect → Debezium connector 등록
+> - **Debezium 주의**: Kafka와 별개로 Kafka Connect 위에서 동작하는 connector임. MySQL binary log(binlog) 활성화 설정이 DB 레벨에서 선행되어야 함
+> - **Debezium 이벤트 포맷 주의**: 일반 Kafka 메시지와 달리 `before`/`after` 필드를 가진 envelope 구조임. Course Consumer 작성 시 이 포맷 기준으로 파싱해야 함
+> - Course Consumer가 감지해야 할 변경: `capacity` 변경(강의 수정 PUT) + `status = CLOSED`(폐강 DELETE) — 둘 다 Phase 4에서 구현 완료
+
+- [x] Kafka 토픽 생성
   - `enrollment-events` (파티션 3개)
   - `enrollment-cancel-events` (파티션 1개)
   - `course-events` (파티션 1개)
   - `enrollment-dead-letter` (파티션 1개)
-- [ ] Kafka Producer 설정 (acks=all)
+- [x] Kafka Producer 설정 (acks=all)
 - [ ] Debezium CDC 설정 — course 테이블 변경 감지 → `course-events` 발행
 - [ ] Course Consumer 구현
   - 정원 변경 시: RDS COUNT → 잔여 자리 재계산 후 Redis SET + 대기자 알림
