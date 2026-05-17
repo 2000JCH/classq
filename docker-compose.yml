@@ -7,9 +7,7 @@ services:
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,    # Spring Boot (외부)
-                        PLAINTEXT_INTERNAL://0.0.0.0:29092, # 컨테이너끼리
-                        CONTROLLER://0.0.0.0:9093   #KRaft 컨트롤러 내부 전용
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
 
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093

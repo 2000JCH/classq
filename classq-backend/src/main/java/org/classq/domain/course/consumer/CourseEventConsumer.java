@@ -27,12 +27,18 @@ public class CourseEventConsumer {
             DebeziumCourseEventDto event = objectMapper.readValue(message, DebeziumCourseEventDto.class);
             CourseDebeziumPayloadDto payload = event.getPayload();
 
-            if (!"u".equals(payload.getOp()) || payload.getAfter() == null) {
+            if (payload == null || !"u".equals(payload.getOp()) || payload.getAfter() == null) {
                 return;
             }
 
             CourseSnapshotDto after = payload.getAfter();
             CourseSnapshotDto before = payload.getBefore();
+
+            if (after.getId() == null) {
+                log.warn("course-events: after.id가 null입니다.");
+                return;
+            }
+
             long courseId = after.getId();
 
             if ("CLOSED".equals(after.getStatus())) {
@@ -43,7 +49,8 @@ public class CourseEventConsumer {
                 return;
             }
 
-            if (before != null && !before.getCapacity().equals(after.getCapacity())) {
+            if (before != null && before.getCapacity() != null && after.getCapacity() != null
+                    && !before.getCapacity().equals(after.getCapacity())) {
                 int enrolled = enrollmentRepository.countByCourse_IdAndEnrollmentStatus(
                         courseId, EnrollmentStatus.COMPLETED
                 );
