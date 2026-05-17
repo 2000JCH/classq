@@ -59,7 +59,7 @@
 > **시작 전 참고사항**
 > - Kafka 완전 처음 → 토픽/파티션/offset/Consumer Group/acks 개념부터 잡고 시작할 것
 > - Docker 익숙함 → docker-compose로 인프라 한 번에 올리는 방식으로 진행
-> - 띄워야 할 컨테이너: Zookeeper → Kafka → Kafka Connect → Debezium connector 등록
+> - 띄워야 할 컨테이너: Kafka(KRaft) → Kafka Connect → Debezium connector 등록 (Zookeeper 없음 — KRaft 내장)
 > - **Debezium 주의**: Kafka와 별개로 Kafka Connect 위에서 동작하는 connector임. MySQL binary log(binlog) 활성화 설정이 DB 레벨에서 선행되어야 함
 > - **Debezium 이벤트 포맷 주의**: 일반 Kafka 메시지와 달리 `before`/`after` 필드를 가진 envelope 구조임. Course Consumer 작성 시 이 포맷 기준으로 파싱해야 함
 > - Course Consumer가 감지해야 할 변경: `capacity` 변경(강의 수정 PUT) + `status = CLOSED`(폐강 DELETE) — 둘 다 Phase 4에서 구현 완료
@@ -70,10 +70,12 @@
   - `course-events` (파티션 1개)
   - `enrollment-dead-letter` (파티션 1개)
 - [x] Kafka Producer 설정 (acks=all)
-- [ ] Debezium CDC 설정 — course 테이블 변경 감지 → `course-events` 발행
-- [ ] Course Consumer 구현
-  - 정원 변경 시: RDS COUNT → 잔여 자리 재계산 후 Redis SET + 대기자 알림
-  - 폐강 시: 수강/대기 학생 COURSE_CLOSED 알림 + 잠금 해제 + Redis key 삭제
+- [x] docker-compose.yml 작성 (Kafka KRaft + Kafka Connect/Debezium + MySQL + Redis)
+- [x] Debezium CDC 설정 — course 테이블 변경 감지 → `course-events` 발행
+  - `docker/debezium-connector.json` 작성 (snapshot.mode=schema_only, RegexRouter로 course-events 매핑)
+- [x] Course Consumer 구현 (`domain/course/consumer/CourseEventConsumer.java`)
+  - 정원 변경 시: RDS COUNT → 잔여 자리 재계산 후 Redis SET (대기자 알림은 Phase 8)
+  - 폐강 시: 잠금 해제 + Redis key 삭제 (수강/대기 학생 알림은 Phase 8)
 
 ---
 
