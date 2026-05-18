@@ -24,7 +24,7 @@ public class KafkaTopicConfig {
 
     @Bean
     public NewTopic courseEventsTopic() {
-        return TopicBuilder.name("course-events")
+        return TopicBuilder.name("course-events")       // 폐강 시
                 .partitions(1)
                 .build();
     }

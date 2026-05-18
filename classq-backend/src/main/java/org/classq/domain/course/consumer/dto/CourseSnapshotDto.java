@@ -10,6 +10,6 @@ import lombok.NoArgsConstructor;
 public class CourseSnapshotDto {
 
     private Long id;
-    private Integer capacity;
+    private Integer capacity;   // 강의 정원(최대 수강 인원)
     private String status;
 }

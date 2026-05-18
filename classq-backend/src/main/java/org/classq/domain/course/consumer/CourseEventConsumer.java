@@ -21,6 +21,7 @@ public class CourseEventConsumer {
     private final EnrollmentRepository enrollmentRepository;
     private final ObjectMapper objectMapper;
 
+    // 폐강 시 (course-events = 폐강)
     @KafkaListener(topics = "course-events", groupId = "enrollment-processor")
     public void consume(String message) {
         try {
@@ -41,6 +42,7 @@ public class CourseEventConsumer {
 
             long courseId = after.getId();
 
+            // 폐강
             if ("CLOSED".equals(after.getStatus())) {
                 redisTemplate.delete("lock:course:" + courseId);
                 redisTemplate.delete("enrollment:course:" + courseId);
@@ -49,11 +51,16 @@ public class CourseEventConsumer {
                 return;
             }
 
+            // 정원 변경
             if (before != null && before.getCapacity() != null && after.getCapacity() != null
                     && !before.getCapacity().equals(after.getCapacity())) {
+
+                // RDS에서 해당 강의에 수강 완료(COMPLETED) 상태인 학생 수를 COUNT 해서 enrolled에 담음
                 int enrolled = enrollmentRepository.countByCourse_IdAndEnrollmentStatus(
                         courseId, EnrollmentStatus.COMPLETED
                 );
+
+                // 새 정원 40 - 실제 수강 인원 20 = 잔여 자리 20
                 int remaining = Math.max(0, after.getCapacity() - enrolled);
                 redisTemplate.opsForValue().set("enrollment:course:" + courseId, String.valueOf(remaining));
                 log.info("정원 변경 반영 - courseId: {}, 잔여: {}", courseId, remaining);
