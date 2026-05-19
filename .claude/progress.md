@@ -56,14 +56,6 @@
 
 ## Phase 5. Kafka · Debezium 설정
 
-> **시작 전 참고사항**
-> - Kafka 완전 처음 → 토픽/파티션/offset/Consumer Group/acks 개념부터 잡고 시작할 것
-> - Docker 익숙함 → docker-compose로 인프라 한 번에 올리는 방식으로 진행
-> - 띄워야 할 컨테이너: Kafka(KRaft) → Kafka Connect → Debezium connector 등록 (Zookeeper 없음 — KRaft 내장)
-> - **Debezium 주의**: Kafka와 별개로 Kafka Connect 위에서 동작하는 connector임. MySQL binary log(binlog) 활성화 설정이 DB 레벨에서 선행되어야 함
-> - **Debezium 이벤트 포맷 주의**: 일반 Kafka 메시지와 달리 `before`/`after` 필드를 가진 envelope 구조임. Course Consumer 작성 시 이 포맷 기준으로 파싱해야 함
-> - Course Consumer가 감지해야 할 변경: `capacity` 변경(강의 수정 PUT) + `status = CLOSED`(폐강 DELETE) — 둘 다 Phase 4에서 구현 완료
-
 - [x] Kafka 토픽 생성
   - `enrollment-events` (파티션 3개)
   - `enrollment-cancel-events` (파티션 1개)
@@ -82,12 +74,14 @@
 ## Phase 6. 수강신청 (Enrollment) ← 핵심
 
 ### 동기 구간
-- [ ] POST `/api/v1/enrollments` — 수강신청
+- [x] POST `/api/v1/enrollments` — 수강신청
   1. `lock:course:{id}` 확인 → 있으면 "대기자 처리 중" 응답
   2. `schedule:student:{id}` 시간표 중복 체크 (캐시 없으면 RDS 조회 후 SET)
   3. `credits:student:{id}` 19학점 초과 체크 (캐시 없으면 RDS 조회 후 SET)
   4. `DECR enrollment:course:{id}` → 음수면 INCR 롤백 후 "마감됨" 응답
   5. Kafka `enrollment-events` 발행
+
+> **내일 시작 전:** 동기 구간 코드 복습 후 비동기 구간 진행
 
 ### 비동기 구간
 - [ ] Enrollment Consumer (`enrollment-processor`)
