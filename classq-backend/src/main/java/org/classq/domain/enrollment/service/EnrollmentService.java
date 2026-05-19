@@ -5,6 +5,7 @@ import org.classq.domain.course.entity.Course;
 import org.classq.domain.course.entity.CourseSchedule;
 import org.classq.domain.course.repository.CourseRepository;
 import org.classq.domain.course.repository.CourseScheduleRepository;
+import org.classq.domain.enrollment.dto.EnrollmentResponseDto;
 import org.classq.domain.enrollment.producer.dto.EnrollmentEvent;
 import org.classq.domain.enrollment.repository.EnrollmentRepository;
 import org.classq.domain.student.entity.Student;
@@ -19,6 +20,8 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Set;
 
+
+
 @Service
 @RequiredArgsConstructor
 public class EnrollmentService {
@@ -29,6 +32,13 @@ public class EnrollmentService {
     private final EnrollmentRepository enrollmentRepository;
     private final RedisTemplate<String, String> redisTemplate;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+
+    // 내 수강신청 목록 조회
+    public List<EnrollmentResponseDto> getMyEnrollments(Long accountId) {
+        Student student = studentRepository.findByAccountIdAndDeletedAtIsNull(accountId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
+        return enrollmentRepository.findMyEnrollments(student.getId());
+    }
 
     // 수강 신청
     public void enroll(Long accountId, Long courseId) {
@@ -52,11 +62,13 @@ public class EnrollmentService {
 
         // 3. 19학점 초과 체크
         String creditsKey = "credits:student:" + studentId;
-        if (!Boolean.TRUE.equals(redisTemplate.hasKey(creditsKey))) {
-            int loaded = enrollmentRepository.sumCreditsByStudentId(studentId);
-            redisTemplate.opsForValue().set(creditsKey, String.valueOf(loaded));
+        String creditsCached = redisTemplate.opsForValue().get(creditsKey);
+        if (creditsCached == null) {
+            long loaded = enrollmentRepository.sumCreditsByStudentId(studentId);
+            creditsCached = String.valueOf(loaded);
+            redisTemplate.opsForValue().set(creditsKey, creditsCached);
         }
-        int currentCredits = Integer.parseInt(redisTemplate.opsForValue().get(creditsKey));
+        int currentCredits = Integer.parseInt(creditsCached);
         if (currentCredits + course.getCredits() > 19) {
             throw new BusinessException(ErrorCode.CREDIT_EXCEEDED);
         }
@@ -77,8 +89,13 @@ public class EnrollmentService {
                 ))
                 .toList();
 
-        kafkaTemplate.send("enrollment-events", String.valueOf(studentId),
-                new EnrollmentEvent(studentId, courseId, course.getCredits(), scheduleEntries));
+        try {
+            kafkaTemplate.send("enrollment-events", String.valueOf(studentId),
+                    new EnrollmentEvent(studentId, courseId, course.getCredits(), scheduleEntries)).get();
+        } catch (Exception e) {
+            redisTemplate.opsForValue().increment("enrollment:course:" + courseId);
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
     }
 
     private void checkScheduleConflict(Long studentId, List<CourseSchedule> newSchedules) {

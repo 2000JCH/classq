@@ -14,6 +14,8 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Slf4j
 @Component
@@ -66,13 +68,18 @@ public class EnrollmentConsumer {
                         .build()
         );
 
-        String scheduleKey = "schedule:student:" + event.getStudentId();
-        for (EnrollmentEvent.ScheduleEntry s : event.getSchedules()) {
-            redisTemplate.opsForSet().add(scheduleKey,
-                    s.getDay() + "|" + s.getStartTime() + "|" + s.getEndTime());
-        }   // schedule:student:123 -> {"MON|09:00|11:00", "WED|14:00|16:00", ... } set타입으로 저장됨
-
-        redisTemplate.opsForValue().increment("credits:student:" + event.getStudentId(), event.getCredits());
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                String scheduleKey = "schedule:student:" + event.getStudentId();
+                for (EnrollmentEvent.ScheduleEntry s : event.getSchedules()) {
+                    redisTemplate.opsForSet().add(scheduleKey,
+                            s.getDay() + "|" + s.getStartTime() + "|" + s.getEndTime());
+                }      // schedule:student:123 -> {"MON|09:00|11:00", "WED|14:00|16:00", ... } set타입으로 저장됨
+                
+                redisTemplate.opsForValue().increment("credits:student:" + event.getStudentId(), event.getCredits());
+            }
+        });
 
         log.info("수강신청 처리 완료 - studentId: {}, courseId: {}", event.getStudentId(), event.getCourseId());
     }
