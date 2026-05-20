@@ -32,5 +32,8 @@ public class Enrollment extends BaseEntity {
     @Column(name = "status", nullable = false)
     private EnrollmentStatus enrollmentStatus = EnrollmentStatus.COMPLETED;
 
+    public void cancel() {
+        this.enrollmentStatus = EnrollmentStatus.CANCELLED;
+    }
 }
 
