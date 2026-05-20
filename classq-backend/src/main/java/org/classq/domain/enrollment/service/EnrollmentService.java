@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 
 
@@ -94,7 +95,7 @@ public class EnrollmentService {
 
         try {
             kafkaTemplate.send("enrollment-events", String.valueOf(studentId),
-                    new EnrollmentEvent(studentId, courseId, course.getCredits(), scheduleEntries)).get();
+                    new EnrollmentEvent(studentId, courseId, course.getCredits(), scheduleEntries)).get(5, TimeUnit.SECONDS);
         } catch (Exception e) {
             redisTemplate.opsForValue().increment("enrollment:course:" + courseId);
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
@@ -117,12 +118,20 @@ public class EnrollmentService {
 
         List<CourseSchedule> schedules = courseScheduleRepository.findByCourseId(courseId);
 
-        // 1. 정원 복구
-        redisTemplate.opsForValue().increment("enrollment:course:" + courseId);
+        // 1. 정원 복구 (키 없으면 DB 기준으로 재초기화)
+        String enrollmentKey = "enrollment:course:" + courseId;
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(enrollmentKey))) {
+            redisTemplate.opsForValue().increment(enrollmentKey);
+        } else {
+            int enrolled = enrollmentRepository.countByCourse_IdAndEnrollmentStatus(courseId, EnrollmentStatus.COMPLETED);
+            int remaining = enrollment.getCourse().getCapacity() - enrolled + 1;
+            redisTemplate.opsForValue().set(enrollmentKey, String.valueOf(remaining));
+        }
 
-        // 2. 시간표 캐시 삭제
+        // 2. 시간표 캐시 삭제 (hasKey 결과를 미리 저장해 롤백에 재사용)
         String scheduleKey = "schedule:student:" + studentId;
-        if (Boolean.TRUE.equals(redisTemplate.hasKey(scheduleKey))) {
+        boolean scheduleKeyExists = Boolean.TRUE.equals(redisTemplate.hasKey(scheduleKey));
+        if (scheduleKeyExists) {
             for (CourseSchedule s : schedules) {
                 redisTemplate.opsForSet().remove(scheduleKey,
                         s.getCourseScheduleDay().name() + "|" + s.getStartTime() + "|" + s.getEndTime());
@@ -144,12 +153,13 @@ public class EnrollmentService {
                 ))
                 .toList();
 
-        try {kafkaTemplate.send("enrollment-cancel-events", String.valueOf(studentId),
-                    new EnrollmentCancelEvent(enrollmentId, studentId, courseId, credits, scheduleEntries)).get();
+        try {
+            kafkaTemplate.send("enrollment-cancel-events", String.valueOf(studentId),
+                    new EnrollmentCancelEvent(enrollmentId, studentId, courseId, credits, scheduleEntries)).get(5, TimeUnit.SECONDS);
         } catch (Exception e) {
             // Kafka 실패 시 Redis 롤백
-            redisTemplate.opsForValue().decrement("enrollment:course:" + courseId);
-            if (Boolean.TRUE.equals(redisTemplate.hasKey(scheduleKey))) {
+            redisTemplate.opsForValue().decrement(enrollmentKey);
+            if (scheduleKeyExists) {
                 for (CourseSchedule s : schedules) {
                     redisTemplate.opsForSet().add(scheduleKey,
                             s.getCourseScheduleDay().name() + "|" + s.getStartTime() + "|" + s.getEndTime());
