@@ -6,6 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.classq.domain.enrollment.entity.Enrollment;
 import org.classq.domain.enrollment.producer.dto.EnrollmentCancelEvent;
 import org.classq.domain.enrollment.repository.EnrollmentRepository;
+import org.classq.global.exception.BusinessException;
+import org.classq.global.exception.ErrorCode;
 import org.classq.domain.notification.entity.Notification;
 import org.classq.domain.notification.entity.NotificationType;
 import org.classq.domain.notification.repository.NotificationRepository;
@@ -20,6 +22,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
@@ -43,7 +46,7 @@ public class EnrollmentCancelConsumer {
 
         // 1. RDS enrollment 상태 CANCELLED로 변경
         Enrollment enrollment = enrollmentRepository.findById(event.getEnrollmentId())
-                .orElseThrow(() -> new RuntimeException("Enrollment not found: " + event.getEnrollmentId()));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ENROLLMENT_NOT_FOUND));
         enrollment.cancel();
 
         // 2. 대기자 확인 → 있으면 NOTIFIED 처리 + 알림 저장
@@ -66,7 +69,8 @@ public class EnrollmentCancelConsumer {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() { // 커밋 후 실행할 작업
-                    redisTemplate.opsForValue().set("lock:course:" + event.getCourseId(), "1");
+                    // TTL 15분: 수락 시간(10분) + Scheduler 처리 여유 / Scheduler 장애 시 자동 해제 안전망
+                    redisTemplate.opsForValue().set("lock:course:" + event.getCourseId(), "1", 15, TimeUnit.MINUTES);
                 }
             });
         }
