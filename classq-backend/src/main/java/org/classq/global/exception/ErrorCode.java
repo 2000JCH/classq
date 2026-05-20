@@ -19,6 +19,7 @@ public enum ErrorCode {
     PROFESSOR_NOT_FOUND(404,"교수를 찾을 수 없습니다."),
     COURSE_NOT_FOUND(404,"강의를 찾을 수 없습니다."),
     DEPARTMENT_NOT_FOUND(404,"학과를 찾을 수 없습니다."),
+    ENROLLMENT_NOT_FOUND(404, "수강신청 내역을 찾을 수 없습니다."),
 
     //서버
     INTERNAL_SERVER_ERROR(500, "서버 내부 오류가 발생했습니다."),

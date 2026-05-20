@@ -24,10 +24,17 @@ public class EnrollmentController {
         return ResponseEntity.ok(enrollmentService.getMyEnrollments(accountId));
     }
 
-    // 수강 신청
+    // 수강신청
     @PostMapping
     public ResponseEntity<Void> enroll(@AuthenticationPrincipal Long accountId, @Valid @RequestBody EnrollmentRequestDto request) {
         enrollmentService.enroll(accountId, request.getCourseId());
         return ResponseEntity.status(201).build();
+    }
+
+    // 수강신청 취소
+    @DeleteMapping("/{enrollmentId}")
+    public ResponseEntity<Void> cancel(@AuthenticationPrincipal Long accountId, @PathVariable Long enrollmentId) {
+        enrollmentService.cancel(accountId, enrollmentId);
+        return ResponseEntity.noContent().build();
     }
 }
