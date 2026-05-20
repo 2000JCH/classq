@@ -62,15 +62,19 @@ public class WaitlistService {
         int rank = waitlistRepository.countByCourse_IdAndWaitlistStatusInAndDeletedAtIsNull(
                 courseId, List.of(WaitlistStatus.WAITING, WaitlistStatus.NOTIFIED)) + 1;
 
-        // 5. RDS INSERT
-        Waitlist waitlist = waitlistRepository.save(
-                Waitlist.builder()
-                        .student(student)
-                        .course(course)
-                        .rank(rank)
-                        .build()
-        );
-
-        return new WaitlistResponseDto(waitlist.getId(), courseId, course.getName(), rank, WaitlistStatus.WAITING);
+        // 5. RDS INSERT (실패 시 Redis 슬롯 복구)
+        try {
+            Waitlist waitlist = waitlistRepository.save(
+                    Waitlist.builder()
+                            .student(student)
+                            .course(course)
+                            .rank(rank)
+                            .build()
+            );
+            return new WaitlistResponseDto(waitlist.getId(), courseId, course.getName(), rank, WaitlistStatus.WAITING);
+        } catch (Exception e) {
+            redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
     }
 }

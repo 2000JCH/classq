@@ -50,7 +50,7 @@ public class EnrollmentCancelConsumer {
         enrollment.cancel();
 
         // 2. 대기자 확인 → 있으면 NOTIFIED 처리 + 알림 저장
-        Optional<Waitlist> waitlistOpt = waitlistRepository.findFirstByCourse_IdAndWaitlistStatusOrderByRankAsc(event.getCourseId(), WaitlistStatus.WAITING);
+        Optional<Waitlist> waitlistOpt = waitlistRepository.findFirstByCourse_IdAndWaitlistStatusAndDeletedAtIsNullOrderByRankAsc(event.getCourseId(), WaitlistStatus.WAITING);
 
         if (waitlistOpt.isPresent()) {
             Waitlist waitlist = waitlistOpt.get();
