@@ -6,6 +6,9 @@ import org.classq.domain.course.entity.CourseSchedule;
 import org.classq.domain.course.repository.CourseRepository;
 import org.classq.domain.course.repository.CourseScheduleRepository;
 import org.classq.domain.enrollment.dto.EnrollmentResponseDto;
+import org.classq.domain.enrollment.entity.Enrollment;
+import org.classq.domain.enrollment.entity.EnrollmentStatus;
+import org.classq.domain.enrollment.producer.dto.EnrollmentCancelEvent;
 import org.classq.domain.enrollment.producer.dto.EnrollmentEvent;
 import org.classq.domain.enrollment.repository.EnrollmentRepository;
 import org.classq.domain.student.entity.Student;
@@ -19,6 +22,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 
 
@@ -91,13 +95,84 @@ public class EnrollmentService {
 
         try {
             kafkaTemplate.send("enrollment-events", String.valueOf(studentId),
-                    new EnrollmentEvent(studentId, courseId, course.getCredits(), scheduleEntries)).get();
+                    new EnrollmentEvent(studentId, courseId, course.getCredits(), scheduleEntries)).get(5, TimeUnit.SECONDS);
         } catch (Exception e) {
             redisTemplate.opsForValue().increment("enrollment:course:" + courseId);
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
     }
 
+    // 수강신청 취소
+    public void cancel(Long accountId, Long enrollmentId) {
+        Student student = studentRepository.findByAccountIdAndDeletedAtIsNull(accountId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
+
+        Enrollment enrollment = enrollmentRepository
+                .findByIdAndStudent_IdAndEnrollmentStatusAndDeletedAtIsNull(
+                        enrollmentId, student.getId(), EnrollmentStatus.COMPLETED)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ENROLLMENT_NOT_FOUND));
+
+        Long studentId = student.getId();
+        Long courseId = enrollment.getCourse().getId();
+        int credits = enrollment.getCourse().getCredits();
+
+        List<CourseSchedule> schedules = courseScheduleRepository.findByCourseId(courseId);
+
+        // 1. 정원 복구 (키 없으면 DB 기준으로 재초기화)
+        String enrollmentKey = "enrollment:course:" + courseId;
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(enrollmentKey))) {
+            redisTemplate.opsForValue().increment(enrollmentKey);
+        } else {
+            int enrolled = enrollmentRepository.countByCourse_IdAndEnrollmentStatus(courseId, EnrollmentStatus.COMPLETED);
+            int remaining = enrollment.getCourse().getCapacity() - enrolled + 1;
+            redisTemplate.opsForValue().set(enrollmentKey, String.valueOf(remaining));
+        }
+
+        // 2. 시간표 캐시 삭제 (hasKey 결과를 미리 저장해 롤백에 재사용)
+        String scheduleKey = "schedule:student:" + studentId;
+        boolean scheduleKeyExists = Boolean.TRUE.equals(redisTemplate.hasKey(scheduleKey));
+        if (scheduleKeyExists) {
+            for (CourseSchedule s : schedules) {
+                redisTemplate.opsForSet().remove(scheduleKey,
+                        s.getCourseScheduleDay().name() + "|" + s.getStartTime() + "|" + s.getEndTime());
+            }
+        }
+
+        // 3. 학점 캐시 차감
+        String creditsKey = "credits:student:" + studentId;
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(creditsKey))) {
+            redisTemplate.opsForValue().decrement(creditsKey, credits);
+        }
+
+        // 4. Kafka 발행
+        List<EnrollmentCancelEvent.ScheduleEntry> scheduleEntries = schedules.stream()
+                .map(s -> new EnrollmentCancelEvent.ScheduleEntry(
+                        s.getCourseScheduleDay().name(),
+                        s.getStartTime(),
+                        s.getEndTime()
+                ))
+                .toList();
+
+        try {
+            kafkaTemplate.send("enrollment-cancel-events", String.valueOf(studentId),
+                    new EnrollmentCancelEvent(enrollmentId, studentId, courseId, credits, scheduleEntries)).get(5, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            // Kafka 실패 시 Redis 롤백
+            redisTemplate.opsForValue().decrement(enrollmentKey);
+            if (scheduleKeyExists) {
+                for (CourseSchedule s : schedules) {
+                    redisTemplate.opsForSet().add(scheduleKey,
+                            s.getCourseScheduleDay().name() + "|" + s.getStartTime() + "|" + s.getEndTime());
+                }
+            }
+            if (Boolean.TRUE.equals(redisTemplate.hasKey(creditsKey))) {
+                redisTemplate.opsForValue().increment(creditsKey, credits);
+            }
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    // 시간표 체크
     private void checkScheduleConflict(Long studentId, List<CourseSchedule> newSchedules) {
         String scheduleKey = "schedule:student:" + studentId;
 

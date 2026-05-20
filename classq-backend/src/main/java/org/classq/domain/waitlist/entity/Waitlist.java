@@ -41,4 +41,9 @@ public class Waitlist extends BaseEntity {
     //수락 만료 시간 10분 지나면 Scheduler -> EXPIRED 처리
     @Column(name = "expired_at")
     private LocalDateTime expiredAt;
+
+    public void notified() {
+        this.waitlistStatus = WaitlistStatus.NOTIFIED;
+        this.expiredAt = LocalDateTime.now().plusMinutes(10);
+    }
 }

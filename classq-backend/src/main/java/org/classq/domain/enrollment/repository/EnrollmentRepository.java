@@ -8,10 +8,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     int countByCourse_IdAndEnrollmentStatus(Long courseId, EnrollmentStatus status);
+
+    Optional<Enrollment> findByIdAndStudent_IdAndEnrollmentStatusAndDeletedAtIsNull(
+            Long id, Long studentId, EnrollmentStatus status);
 
     @Query("SELECT COALESCE(SUM(e.course.credits), 0) FROM Enrollment e " +
             "WHERE e.student.id = :studentId AND e.enrollmentStatus = 'COMPLETED' AND e.deletedAt IS NULL")
