@@ -23,4 +23,13 @@ public class WaitlistController {
             @Valid @RequestBody WaitlistRequestDto request) {
         return ResponseEntity.status(201).body(waitlistService.register(accountId, request.getCourseId()));
     }
+
+    // 대기자 취소
+    @DeleteMapping("/{waitlistId}")
+    public ResponseEntity<Void> cancel(
+            @AuthenticationPrincipal Long accountId,
+            @PathVariable Long waitlistId) {
+        waitlistService.cancel(accountId, waitlistId);
+        return ResponseEntity.noContent().build();
+    }
 }
