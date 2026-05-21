@@ -31,6 +31,7 @@ public enum ErrorCode {
     CREDIT_EXCEEDED(400, "학점이 초과되었습니다."),
     TIME_CONFLICT(400, "시간표가 중복됩니다."),
     DUPLICATE_ENROLLMENT(409, "이미 신청한 강의입니다."),
+    DUPLICATE_WAITLIST(409, "이미 대기 신청한 강의입니다."),
     INVALID_INPUT(400, "요청 입력값이 올바르지 않습니다.");
 
     private final int status;

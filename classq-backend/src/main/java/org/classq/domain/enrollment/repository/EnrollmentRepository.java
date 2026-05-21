@@ -14,6 +14,10 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     int countByCourse_IdAndEnrollmentStatus(Long courseId, EnrollmentStatus status);
 
+    // 이미 수강신청 완료했는지 확인
+    boolean existsByStudent_IdAndCourse_IdAndEnrollmentStatusAndDeletedAtIsNull(
+            Long studentId, Long courseId, EnrollmentStatus status);
+
     Optional<Enrollment> findByIdAndStudent_IdAndEnrollmentStatusAndDeletedAtIsNull(
             Long id, Long studentId, EnrollmentStatus status);
 
