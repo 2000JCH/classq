@@ -5,6 +5,7 @@ import org.classq.domain.course.entity.Course;
 import org.classq.domain.course.repository.CourseRepository;
 import org.classq.domain.enrollment.entity.EnrollmentStatus;
 import org.classq.domain.enrollment.repository.EnrollmentRepository;
+import org.springframework.transaction.annotation.Transactional;
 import org.classq.domain.student.entity.Student;
 import org.classq.domain.student.repository.StudentRepository;
 import org.classq.domain.waitlist.dto.WaitlistResponseDto;
@@ -76,5 +77,35 @@ public class WaitlistService {
             redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    // 대기자 취소
+    @Transactional
+    public void cancel(Long accountId, Long waitlistId) {
+        // 1. 학생 조회
+        Student student = studentRepository.findByAccountIdAndDeletedAtIsNull(accountId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
+
+        // 2. 대기 건 조회
+        Waitlist waitlist = waitlistRepository.findById(waitlistId)
+                .filter(w -> w.getDeletedAt() == null)
+                .orElseThrow(() -> new BusinessException(ErrorCode.WAITLIST_NOT_FOUND));
+
+        // 3. 본인 대기 건인지 확인
+        if (!waitlist.getStudent().getId().equals(student.getId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        // 4. 취소 가능한 상태인지 확인 (WAITING, NOTIFIED만 가능)
+        WaitlistStatus status = waitlist.getWaitlistStatus();
+        if (status != WaitlistStatus.WAITING && status != WaitlistStatus.NOTIFIED) {
+            throw new BusinessException(ErrorCode.WAITLIST_INVALID_STATUS);
+        }
+
+        // 5. RDS soft delete
+        waitlist.delete();
+
+        // 6. Redis 대기 슬롯 반환 (DB 변경 후 수행 — 실패 시 트랜잭션 롤백으로 정합성 유지)
+        redisTemplate.opsForValue().increment("waitlist:course:" + waitlist.getCourse().getId());
     }
 }
