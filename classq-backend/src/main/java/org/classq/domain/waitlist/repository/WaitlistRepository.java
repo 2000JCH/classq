@@ -17,4 +17,7 @@ public interface WaitlistRepository extends JpaRepository<Waitlist, Long> {
 
     // 다음 rank 계산용 (현재 활성 대기자 수)
     int countByCourse_IdAndWaitlistStatusInAndDeletedAtIsNull(Long courseId, List<WaitlistStatus> statuses);
+
+    // 내 대기 목록 조회 (WAITING, NOTIFIED만)
+    List<Waitlist> findByStudent_IdAndWaitlistStatusInAndDeletedAtIsNull(Long studentId, List<WaitlistStatus> statuses);
 }
