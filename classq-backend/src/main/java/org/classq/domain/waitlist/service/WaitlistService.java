@@ -102,9 +102,10 @@ public class WaitlistService {
             throw new BusinessException(ErrorCode.WAITLIST_INVALID_STATUS);
         }
 
-        // 5. Redis 대기 슬롯 반환
-        redisTemplate.opsForValue().increment("waitlist:course:" + waitlist.getCourse().getId());
-
+        // 5. RDS soft delete
         waitlist.delete();
+
+        // 6. Redis 대기 슬롯 반환 (DB 변경 후 수행 — 실패 시 트랜잭션 롤백으로 정합성 유지)
+        redisTemplate.opsForValue().increment("waitlist:course:" + waitlist.getCourse().getId());
     }
 }
