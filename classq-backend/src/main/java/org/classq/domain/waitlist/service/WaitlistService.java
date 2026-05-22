@@ -179,7 +179,8 @@ public class WaitlistService {
     }
 
     // 만료 처리 후 다음 순번 알림 (accept 실패, reject, scheduler 공통)
-    private void expireAndPromoteNext(Waitlist waitlist) {
+    @Transactional
+    public void expireAndPromoteNext(Waitlist waitlist) {
         waitlist.expire();  // EXPIRED 상태 변경
 
         Long courseId = waitlist.getCourse().getId();
