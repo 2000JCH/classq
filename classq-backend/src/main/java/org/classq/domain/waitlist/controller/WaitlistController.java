@@ -49,4 +49,13 @@ public class WaitlistController {
         waitlistService.accept(accountId, waitlistId);
         return ResponseEntity.ok().build();
     }
+
+    // 대기 거절
+    @PostMapping("/{waitlistId}/reject")
+    public ResponseEntity<Void> reject(
+            @AuthenticationPrincipal Long accountId,
+            @PathVariable Long waitlistId) {
+        waitlistService.reject(accountId, waitlistId);
+        return ResponseEntity.ok().build();
+    }
 }

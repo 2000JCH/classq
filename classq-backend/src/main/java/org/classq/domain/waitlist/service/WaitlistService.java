@@ -157,6 +157,27 @@ public class WaitlistService {
         }
     }
 
+    // 대기 거절
+    @Transactional
+    public void reject(Long accountId, Long waitlistId) {
+        Student student = studentRepository.findByAccountIdAndDeletedAtIsNull(accountId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
+
+        Waitlist waitlist = waitlistRepository.findById(waitlistId)
+                .filter(w -> w.getDeletedAt() == null)
+                .orElseThrow(() -> new BusinessException(ErrorCode.WAITLIST_NOT_FOUND));
+
+        if (!waitlist.getStudent().getId().equals(student.getId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        if (waitlist.getWaitlistStatus() != WaitlistStatus.NOTIFIED) {
+            throw new BusinessException(ErrorCode.WAITLIST_INVALID_STATUS);
+        }
+
+        expireAndPromoteNext(waitlist);
+    }
+
     // 만료 처리 후 다음 순번 알림 (accept 실패, reject, scheduler 공통)
     private void expireAndPromoteNext(Waitlist waitlist) {
         waitlist.expire();  // EXPIRED 상태 변경
