@@ -40,4 +40,22 @@ public class WaitlistController {
         waitlistService.cancel(accountId, waitlistId);
         return ResponseEntity.noContent().build();
     }
+
+    // 대기 수락
+    @PostMapping("/{waitlistId}/accept")
+    public ResponseEntity<Void> accept(
+            @AuthenticationPrincipal Long accountId,
+            @PathVariable Long waitlistId) {
+        waitlistService.accept(accountId, waitlistId);
+        return ResponseEntity.ok().build();
+    }
+
+    // 대기 거절
+    @PostMapping("/{waitlistId}/reject")
+    public ResponseEntity<Void> reject(
+            @AuthenticationPrincipal Long accountId,
+            @PathVariable Long waitlistId) {
+        waitlistService.reject(accountId, waitlistId);
+        return ResponseEntity.ok().build();
+    }
 }
