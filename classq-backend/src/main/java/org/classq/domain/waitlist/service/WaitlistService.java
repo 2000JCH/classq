@@ -5,6 +5,10 @@ import org.classq.domain.course.entity.Course;
 import org.classq.domain.course.repository.CourseRepository;
 import org.classq.domain.enrollment.entity.EnrollmentStatus;
 import org.classq.domain.enrollment.repository.EnrollmentRepository;
+import org.classq.domain.enrollment.service.EnrollmentService;
+import org.classq.domain.notification.entity.Notification;
+import org.classq.domain.notification.entity.NotificationType;
+import org.classq.domain.notification.repository.NotificationRepository;
 import org.springframework.transaction.annotation.Transactional;
 import org.classq.domain.student.entity.Student;
 import org.classq.domain.student.repository.StudentRepository;
@@ -18,7 +22,9 @@ import org.classq.global.exception.ErrorCode;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +34,8 @@ public class WaitlistService {
     private final CourseRepository courseRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final WaitlistRepository waitlistRepository;
+    private final NotificationRepository notificationRepository;
+    private final EnrollmentService enrollmentService;
     private final RedisTemplate<String, String> redisTemplate;
 
     // 내 대기 목록 조회
@@ -108,6 +116,68 @@ public class WaitlistService {
         } catch (Exception e) {
             redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    // 대기 수락
+    @Transactional
+    public void accept(Long accountId, Long waitlistId) {
+        Student student = studentRepository.findByAccountIdAndDeletedAtIsNull(accountId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
+
+        Waitlist waitlist = waitlistRepository.findById(waitlistId)
+                .filter(w -> w.getDeletedAt() == null)
+                .orElseThrow(() -> new BusinessException(ErrorCode.WAITLIST_NOT_FOUND));
+
+        // 본인 확인
+        if (!waitlist.getStudent().getId().equals(student.getId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        // 상태 확인 (NOTIFIED만 수락 가능)
+        if (waitlist.getWaitlistStatus() != WaitlistStatus.NOTIFIED) {
+            throw new BusinessException(ErrorCode.WAITLIST_INVALID_STATUS);
+        }
+
+        // 만료 시간 확인 (10분 제한 시간이 지났으면 만료 처리 후 다음 순번에게  기회를 넘김)
+        if (waitlist.getExpiredAt() != null && LocalDateTime.now().isAfter(waitlist.getExpiredAt())) {
+            expireAndPromoteNext(waitlist);
+            throw new BusinessException(ErrorCode.WAITLIST_EXPIRED);
+        }
+
+        Long studentId = student.getId();
+        Long courseId = waitlist.getCourse().getId();
+
+        try {
+            enrollmentService.enrollFromWaitlist(studentId, courseId);
+            waitlist.expire();
+        } catch (BusinessException e) {
+            expireAndPromoteNext(waitlist);
+            throw e;
+        }
+    }
+
+    // 만료 처리 후 다음 순번 알림 (accept 실패, reject, scheduler 공통)
+    private void expireAndPromoteNext(Waitlist waitlist) {
+        waitlist.expire();  // EXPIRED 상태 변경
+
+        Long courseId = waitlist.getCourse().getId();
+        Optional<Waitlist> nextOpt = waitlistRepository
+                .findFirstByCourse_IdAndWaitlistStatusAndDeletedAtIsNullOrderByRankAsc(courseId, WaitlistStatus.WAITING);
+
+        if (nextOpt.isPresent()) {
+            Waitlist next = nextOpt.get();
+            next.notified();
+            notificationRepository.save(
+                    Notification.builder()
+                            .student(next.getStudent())
+                            .course(next.getCourse())
+                            .notificationType(NotificationType.WAITLIST_AVAILABLE)
+                            .message("수강 신청 자리가 생겼습니다. 10분 내에 수락해 주세요.")
+                            .build()
+            );
+        } else {
+            redisTemplate.delete("lock:course:" + courseId);
         }
     }
 

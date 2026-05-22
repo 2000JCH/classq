@@ -46,4 +46,8 @@ public class Waitlist extends BaseEntity {
         this.waitlistStatus = WaitlistStatus.NOTIFIED;
         this.expiredAt = LocalDateTime.now().plusMinutes(10);
     }
+
+    public void expire() {
+        this.waitlistStatus = WaitlistStatus.EXPIRED;
+    }
 }

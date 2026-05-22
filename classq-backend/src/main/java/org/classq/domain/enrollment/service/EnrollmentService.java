@@ -172,6 +172,55 @@ public class EnrollmentService {
         }
     }
 
+    // 대기 수락 시 수강신청 처리 (lock 체크 없이 바로 진행)
+    public void enrollFromWaitlist(Long studentId, Long courseId) {
+        Course course = courseRepository.findById(courseId)
+                .filter(c -> c.getDeletedAt() == null)
+                .orElseThrow(() -> new BusinessException(ErrorCode.COURSE_NOT_FOUND));
+
+        // 시간표 충돌 확인
+        List<CourseSchedule> newSchedules = courseScheduleRepository.findByCourseId(courseId);
+        checkScheduleConflict(studentId, newSchedules);
+
+        // 학점 초과 확인
+        String creditsKey = "credits:student:" + studentId;
+        String creditsCached = redisTemplate.opsForValue().get(creditsKey);
+        if (creditsCached == null) {
+            long loaded = enrollmentRepository.sumCreditsByStudentId(studentId);
+            creditsCached = String.valueOf(loaded);
+            redisTemplate.opsForValue().set(creditsKey, creditsCached);
+        }
+        if (Integer.parseInt(creditsCached) + course.getCredits() > 19) {
+            throw new BusinessException(ErrorCode.CREDIT_EXCEEDED);
+        }
+
+        // Redis 잔여 자리 차감
+        Long remaining = redisTemplate.opsForValue().decrement("enrollment:course:" + courseId);
+        if (remaining == null || remaining < 0) {
+            redisTemplate.opsForValue().increment("enrollment:course:" + courseId);
+            throw new BusinessException(ErrorCode.ENROLLMENT_CLOSED);
+        }
+
+        List<EnrollmentEvent.ScheduleEntry> scheduleEntries = newSchedules.stream()
+                .map(s -> new EnrollmentEvent.ScheduleEntry(
+                        s.getCourseScheduleDay().name(),
+                        s.getStartTime(),
+                        s.getEndTime()
+                ))
+                .toList();
+
+        // Kafka 이벤트 발생
+        try {
+            kafkaTemplate.send("enrollment-events", String.valueOf(studentId),
+                    new EnrollmentEvent(studentId, courseId, course.getCredits(), scheduleEntries)).get(5, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            redisTemplate.opsForValue().increment("enrollment:course:" + courseId);
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
+
+        redisTemplate.delete("lock:course:" + courseId);
+    }
+
     // 시간표 체크
     private void checkScheduleConflict(Long studentId, List<CourseSchedule> newSchedules) {
         String scheduleKey = "schedule:student:" + studentId;
