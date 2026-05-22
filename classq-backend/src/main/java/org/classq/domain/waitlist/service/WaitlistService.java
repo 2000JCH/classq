@@ -8,6 +8,7 @@ import org.classq.domain.enrollment.repository.EnrollmentRepository;
 import org.springframework.transaction.annotation.Transactional;
 import org.classq.domain.student.entity.Student;
 import org.classq.domain.student.repository.StudentRepository;
+import org.classq.domain.waitlist.dto.WaitlistListResponseDto;
 import org.classq.domain.waitlist.dto.WaitlistResponseDto;
 import org.classq.domain.waitlist.entity.Waitlist;
 import org.classq.domain.waitlist.entity.WaitlistStatus;
@@ -28,6 +29,37 @@ public class WaitlistService {
     private final EnrollmentRepository enrollmentRepository;
     private final WaitlistRepository waitlistRepository;
     private final RedisTemplate<String, String> redisTemplate;
+
+    // 내 대기 목록 조회
+    public WaitlistListResponseDto getMyWaitlists(Long accountId) {
+        // 1. 학생 조회
+        Student student = studentRepository.findByAccountIdAndDeletedAtIsNull(accountId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
+
+        Long studentId = student.getId();
+
+        // 2. 대기 목록 조회 (WAITING, NOTIFIED만 조회)
+        List<WaitlistResponseDto> waitlists = waitlistRepository
+                .findByStudent_IdAndWaitlistStatusInAndDeletedAtIsNull(
+                        studentId, List.of(WaitlistStatus.WAITING, WaitlistStatus.NOTIFIED))
+                .stream()
+                .map(w -> new WaitlistResponseDto(
+                        w.getId(), w.getCourse().getId(), w.getCourse().getName(),
+                        w.getRank(), w.getWaitlistStatus()))
+                .toList();
+
+        // 3. 현재 학점 조회 (Redis 캐시 우선, 없으면 RDS)
+        String creditsKey = "credits:student:" + studentId;
+        String creditsCached = redisTemplate.opsForValue().get(creditsKey);
+        if (creditsCached == null) {
+            long loaded = enrollmentRepository.sumCreditsByStudentId(studentId);
+            creditsCached = String.valueOf(loaded);
+            redisTemplate.opsForValue().set(creditsKey, creditsCached);
+        }
+        int currentCredits = Integer.parseInt(creditsCached);
+
+        return new WaitlistListResponseDto(waitlists, currentCredits, 19);
+    }
 
     // 대기자 등록
     public WaitlistResponseDto register(Long accountId, Long courseId) {

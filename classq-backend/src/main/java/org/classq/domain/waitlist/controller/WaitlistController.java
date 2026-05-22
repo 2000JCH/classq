@@ -2,6 +2,7 @@ package org.classq.domain.waitlist.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.classq.domain.waitlist.dto.WaitlistListResponseDto;
 import org.classq.domain.waitlist.dto.WaitlistRequestDto;
 import org.classq.domain.waitlist.dto.WaitlistResponseDto;
 import org.classq.domain.waitlist.service.WaitlistService;
@@ -15,6 +16,13 @@ import org.springframework.web.bind.annotation.*;
 public class WaitlistController {
 
     private final WaitlistService waitlistService;
+
+    // 내 대기 목록 조회
+    @GetMapping("/me")
+    public ResponseEntity<WaitlistListResponseDto> getMyWaitlists(
+            @AuthenticationPrincipal Long accountId) {
+        return ResponseEntity.ok(waitlistService.getMyWaitlists(accountId));
+    }
 
     // 대기자 등록
     @PostMapping
