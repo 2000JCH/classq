@@ -81,49 +81,61 @@
   4. `DECR enrollment:course:{id}` → 음수면 INCR 롤백 후 "마감됨" 응답
   5. Kafka `enrollment-events` 발행
 
-> **내일 시작 전:** 동기 구간 코드 복습 후 비동기 구간 진행
-
 ### 비동기 구간
-- [ ] Enrollment Consumer (`enrollment-processor`)
+- [x] Enrollment Consumer (`enrollment-processor`)
   - RDS INSERT (enrollment, status = COMPLETED)
   - Redis `schedule:student:{id}` 시간 추가
   - Redis `credits:student:{id}` INCRBY
   - 3회 재시도 실패 시 `enrollment-dead-letter` 전송
 
 ### 취소 동기 구간
-- [ ] DELETE `/api/v1/enrollments/{enrollmentId}` — 수강신청 취소
+- [x] DELETE `/api/v1/enrollments/{enrollmentId}` — 수강신청 취소
   1. Redis `INCR enrollment:course:{id}`
   2. Redis `schedule:student:{id}` 해당 시간 삭제
   3. Redis `credits:student:{id}` DECRBY
   4. Kafka `enrollment-cancel-events` 발행
 
 ### 취소 비동기 구간
-- [ ] Cancel Consumer
+- [x] Cancel Consumer
   - RDS UPDATE (enrollment status = CANCELLED)
-  - 대기자 있으면: `SET lock:course:{id}` + waitlist rank 1번 NOTIFIED + expired_at 세팅 + notification INSERT
+  - 대기자 있으면: `SET lock:course:{id}` (TTL 15분) + waitlist rank 1번 NOTIFIED + expired_at 세팅 + notification INSERT
 
 ### 조회
-- [ ] GET `/api/v1/enrollments/me` — 내 수강신청 목록 조회
+- [x] GET `/api/v1/enrollments/me` — 내 수강신청 목록 조회
 
 ---
 
 ## Phase 7. 대기자 (Waitlist)
 
-- [ ] POST `/api/v1/waitlists` — 대기자 등록
+- [x] POST `/api/v1/waitlists` — 대기자 등록
   - `DECR waitlist:course:{id}` → 음수면 INCR 롤백 후 "대기 불가" 응답
   - RDS INSERT (waitlist, status = WAITING)
-- [ ] DELETE `/api/v1/waitlists/{waitlistId}` — 대기자 취소
+  - 📌 내일 재복습: rank 계산 로직 (`countByCourse_IdAndWaitlistStatusIn(WAITING, NOTIFIED) + 1`)
+  - ⚠️ 동시성 문제 (coderabbit Critical) — 추후 보완 필요
+    - **문제**: `exists 체크 → count+1(rank 계산) → save` 3단계가 원자적이지 않음    
+    - **증상1 (중복 등록)**: 학생 A가 exists 체크 통과 직후, 같은 학생의 요청이 또 exists 체크를 통과하면 같은 학생이 두 번 대기 등록될 수 있음. 단, `(student_id, course_id)` unique constraint가 DB에 있어서 실제 INSERT 시 하나는 예외 발생 → 완전히 막히진 않음
+    - **증상2 (rank 중복)**: 학생 A와 B가 동시에 count 조회 시 둘 다 같은 값을 읽어 같은 rank가 부여될 수 있음 (예: 둘 다 rank=3)
+    - **해결 방향**: 분산 락(Redisson) 적용 또는 DB 시퀀스/AUTO_INCREMENT로 rank 관리. 비관적 락(PESSIMISTIC_WRITE) / 낙관적 락(@Version) 도입도 검토.
+- [x] DELETE `/api/v1/waitlists/{waitlistId}` — 대기자 취소
   - Redis `INCR waitlist:course:{id}`
   - RDS UPDATE (soft delete)
-- [ ] GET `/api/v1/waitlists/me` — 내 대기 목록 조회 (currentCredits / maxCredits 포함)
-- [ ] POST `/api/v1/waitlists/{waitlistId}/accept` — 대기 수락
+- [x] GET `/api/v1/waitlists/me` — 내 대기 목록 조회 (currentCredits / maxCredits 포함)
+- [x] POST `/api/v1/waitlists/{waitlistId}/accept` — 대기 수락
   - 학점 초과 / 시간 중복 체크 → 실패 시 status = EXPIRED → 다음 순번으로
   - 성공 시: `DECR enrollment:course:{id}` + Kafka 발행 + `DEL lock:course:{id}`
-- [ ] POST `/api/v1/waitlists/{waitlistId}/reject` — 대기 거절 → 다음 순번으로
-- [ ] Scheduler (1분 주기) — expired_at 초과 NOTIFIED 대기자 처리
+  - ⚠️ enroll() 진입 시 NOTIFIED 대기자 존재하면 차단 로직 추가 필요 (race condition 보완)
+  - 📌 `expireAndPromoteNext(Waitlist)` 공통 메서드 추출 — reject, Scheduler에서 재사용 예정
+- [x] POST `/api/v1/waitlists/{waitlistId}/reject` — 대기 거절 → 다음 순번으로
+- [x] Scheduler (1분 주기) — expired_at 초과 NOTIFIED 대기자 처리
   - status = EXPIRED
   - 다음 순번 있으면: 잠금 유지 + 알림 발송
   - 다음 순번 없으면: `DEL lock:course:{id}`
+  - ⚠️ EnrollmentCancelConsumer 멱등성 보완 필요 (Kafka 재처리 시 중복 CANCELLED/NOTIFIED/Notification 방지)
+
+### 보완 필요 항목
+- [ ] `enroll()` 진입 시 NOTIFIED 대기자 존재하면 차단 — lock 세팅 전 타이밍에 일반 수강신청이 끼어드는 race condition 방지
+- [ ] `EnrollmentCancelConsumer` 멱등성 보완 — Kafka 재처리 시 CANCELLED 중복, NOTIFIED/Notification 중복 생성 방지
+- [ ] 대기자 등록 동시성 보완 — `exists → count+1 → save` 비원자적 구간으로 rank 중복 및 중복 등록 가능 (Redisson 분산 락 또는 DB 시퀀스로 rank 관리 검토)
 
 ---
 
