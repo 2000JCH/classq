@@ -2,6 +2,7 @@ package org.classq.domain.notification.service;
 
 import lombok.RequiredArgsConstructor;
 import org.classq.domain.notification.dto.NotificationResponseDto;
+import org.classq.domain.notification.entity.Notification;
 import org.classq.domain.notification.repository.NotificationRepository;
 import org.classq.domain.student.entity.Student;
 import org.classq.domain.student.repository.StudentRepository;
@@ -37,5 +38,21 @@ public class NotificationService {
                         n.getCreatedAt()
                 ))
                 .toList();
+    }
+
+    // 알림 읽음 처리
+    @Transactional
+    public void markAsRead(Long accountId, Long notificationId) {
+        Student student = studentRepository.findByAccountIdAndDeletedAtIsNull(accountId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
+
+        Notification notification = notificationRepository.findById(notificationId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_NOT_FOUND));
+
+        if (!notification.getStudent().getId().equals(student.getId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        notification.markAsRead();
     }
 }
