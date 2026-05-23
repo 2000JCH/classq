@@ -26,8 +26,12 @@ public class WaitlistScheduler {
                 .findByWaitlistStatusAndExpiredAtBeforeAndDeletedAtIsNull(WaitlistStatus.NOTIFIED, LocalDateTime.now());
 
         for (Waitlist waitlist : expired) {
-            waitlistService.expireAndPromoteNext(waitlist);
-            log.info("대기 만료 처리 - waitlistId: {}, courseId: {}", waitlist.getId(), waitlist.getCourse().getId());
+            try {
+                waitlistService.expireAndPromoteNext(waitlist);
+                log.info("대기 만료 처리 - waitlistId: {}, courseId: {}", waitlist.getId(), waitlist.getCourse().getId());
+            } catch (Exception e) {
+                log.error("대기 만료 처리 실패 - waitlistId: {}", waitlist.getId(), e);
+            }
         }
     }
 }

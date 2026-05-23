@@ -110,7 +110,11 @@
 - [x] POST `/api/v1/waitlists` — 대기자 등록
   - `DECR waitlist:course:{id}` → 음수면 INCR 롤백 후 "대기 불가" 응답
   - RDS INSERT (waitlist, status = WAITING)
-  - ⚠️ 동시성 문제 — `exists → count+1 → save` 비원자적 구간으로 rank 중복 및 중복 등록 가능 (보완 필요 항목 참고)
+  - ⚠️ 동시성 문제 (coderabbit Critical) — 추후 보완 필요
+    - **문제**: `exists 체크 → count+1(rank 계산) → save` 3단계가 원자적이지 않음
+    - **증상1 (중복 등록)**: 학생 A가 exists 체크 통과 직후, 같은 학생의 요청이 또 exists 체크를 통과하면 같은 학생이 두 번 대기 등록될 수 있음. 단, `(student_id, course_id)` unique constraint가 DB에 있어서 실제 INSERT 시 하나는 예외 발생 → 완전히 막히진 않음
+    - **증상2 (rank 중복)**: 학생 A와 B가 동시에 count 조회 시 둘 다 같은 값을 읽어 같은 rank가 부여될 수 있음 (예: 둘 다 rank=3)
+    - **해결 방향**: 분산 락(Redisson) 적용 또는 DB 시퀀스/AUTO_INCREMENT로 rank 관리. 비관적 락(PESSIMISTIC_WRITE) / 낙관적 락(@Version) 도입도 검토.
 - [x] DELETE `/api/v1/waitlists/{waitlistId}` — 대기자 취소
   - Redis `INCR waitlist:course:{id}`
   - RDS UPDATE (soft delete)
