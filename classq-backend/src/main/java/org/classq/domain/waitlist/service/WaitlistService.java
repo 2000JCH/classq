@@ -179,10 +179,13 @@ public class WaitlistService {
     }
 
     // 만료 처리 후 다음 순번 알림 (accept 실패, reject, scheduler 공통)
-    private void expireAndPromoteNext(Waitlist waitlist) {
-        waitlist.expire();  // EXPIRED 상태 변경
+    @Transactional
+    public void expireAndPromoteNext(Waitlist waitlist) {
+        Waitlist managed = waitlistRepository.findById(waitlist.getId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.WAITLIST_NOT_FOUND));
+        managed.expire();
 
-        Long courseId = waitlist.getCourse().getId();
+        Long courseId = managed.getCourse().getId();
         Optional<Waitlist> nextOpt = waitlistRepository
                 .findFirstByCourse_IdAndWaitlistStatusAndDeletedAtIsNullOrderByRankAsc(courseId, WaitlistStatus.WAITING);
 

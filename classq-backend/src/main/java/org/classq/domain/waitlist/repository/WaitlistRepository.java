@@ -4,6 +4,7 @@ import org.classq.domain.waitlist.entity.Waitlist;
 import org.classq.domain.waitlist.entity.WaitlistStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,4 +21,7 @@ public interface WaitlistRepository extends JpaRepository<Waitlist, Long> {
 
     // 내 대기 목록 조회 (WAITING, NOTIFIED만)
     List<Waitlist> findByStudent_IdAndWaitlistStatusInAndDeletedAtIsNull(Long studentId, List<WaitlistStatus> statuses);
+
+    // 만료 시간 초과된 NOTIFIED 대기자 목록 (Scheduler용)
+    List<Waitlist> findByWaitlistStatusAndExpiredAtBeforeAndDeletedAtIsNull(WaitlistStatus status, LocalDateTime now);
 }
