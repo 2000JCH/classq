@@ -6,6 +6,7 @@ reviews:
   high_level_summary: true
   poem: false
   review_status: true
+  walkthrough: false
   collapse_walkthrough: false
   sequence_diagrams: false
   pre_merge_checks:
@@ -32,6 +33,9 @@ reviews:
 code_generation:
   docstrings:
     language: "ko-KR"
+
+path_filters:
+  - "!.claude/**"
 
 chat:
   auto_reply: true
