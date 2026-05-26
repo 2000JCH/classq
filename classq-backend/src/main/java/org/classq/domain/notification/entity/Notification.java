@@ -36,4 +36,10 @@ public class Notification extends BaseTimeEntity {
 
     @Column(name = "read_at")
     private LocalDateTime readAt;
+
+    public void markAsRead() {
+        if (this.readAt == null) {
+            this.readAt = LocalDateTime.now();
+        }
+    }
 }

@@ -21,6 +21,7 @@ public enum ErrorCode {
     DEPARTMENT_NOT_FOUND(404,"학과를 찾을 수 없습니다."),
     ENROLLMENT_NOT_FOUND(404, "수강신청 내역을 찾을 수 없습니다."),
     WAITLIST_NOT_FOUND(404, "대기 내역을 찾을 수 없습니다."),
+    NOTIFICATION_NOT_FOUND(404, "알림을 찾을 수 없습니다."),
     WAITLIST_INVALID_STATUS(409, "취소할 수 없는 대기 상태입니다."),
     WAITLIST_EXPIRED(409, "수락 가능 시간이 만료되었습니다."),
 
