@@ -13,8 +13,10 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     // 내(학생) 정보 조회-수정 ( soft delete된 학생 제외 )
     Optional<Student> findByAccountIdAndDeletedAtIsNull(Long accountId);
 
-    @Query(value = "SELECT s FROM Student s JOIN FETCH s.account JOIN FETCH s.department WHERE s.deletedAt IS NULL",
-           countQuery = "SELECT COUNT(s) FROM Student s WHERE s.deletedAt IS NULL")
+    Optional<Student> findByIdAndDeletedAtIsNull(Long id);
+
+    @Query(value = "SELECT s FROM Student s JOIN FETCH s.account JOIN FETCH s.department WHERE s.deletedAt IS NULL",    //이메일, 학과명 조회
+           countQuery = "SELECT COUNT(s) FROM Student s WHERE s.deletedAt IS NULL") // 전체 개수 조회
     Page<Student> findAllActiveStudents(Pageable pageable);
 
 }
