@@ -46,12 +46,8 @@ public class NotificationService {
         Student student = studentRepository.findByAccountIdAndDeletedAtIsNull(accountId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
 
-        Notification notification = notificationRepository.findById(notificationId)
+        Notification notification = notificationRepository.findByIdAndStudentId(notificationId, student.getId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_NOT_FOUND));
-
-        if (!notification.getStudent().getId().equals(student.getId())) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
 
         notification.markAsRead();
     }
