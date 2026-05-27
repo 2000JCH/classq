@@ -6,8 +6,7 @@ reviews:
   high_level_summary: true
   poem: false
   review_status: true
-  walkthrough: false
-  collapse_walkthrough: false
+  collapse_walkthrough: true
   sequence_diagrams: false
   pre_merge_checks:
     docstrings:

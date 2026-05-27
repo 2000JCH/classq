@@ -144,18 +144,24 @@
 
 - [x] GET `/api/v1/notifications` — 내 알림 목록 조회
 - [x] PATCH `/api/v1/notifications/{notificationId}/read` — 읽음 처리 (read_at 갱신)
+  - ⚠️ `markAsRead()` 멱등성 문제 (coderabbit Minor) — 보완 완료
+    - **문제**: `readAt`을 null 체크 없이 매번 덮어써서 최초 읽음 시각이 유실됨
+    - **해결**: `readAt == null`일 때만 갱신하도록 null 체크 추가
+  - ⚠️ 소유권 검증 시 알림 존재 여부 노출 (coderabbit Major) — 보완 완료
+    - **문제**: `findById` 후 소유자 불일치 시 `FORBIDDEN` 반환 → 타 사용자 알림 ID 존재 여부를 외부에서 추측 가능 (정보 노출)
+    - **해결**: `findByIdAndStudentId`로 소유자 조건을 쿼리에 포함, 실패 시 `NOTIFICATION_NOT_FOUND` 단일 응답으로 통일
 
 ---
 
 ## Phase 9. 관리자 (Admin)
 
-- [ ] GET `/api/v1/admin/students` — 전체 학생 목록 조회
-- [ ] DELETE `/api/v1/admin/students/{studentId}` — 특정 학생 강제 탈퇴
-- [ ] GET `/api/v1/admin/courses` — 전체 강의 목록 조회
-- [ ] DELETE `/api/v1/admin/courses/{courseId}` — 특정 강의 강제 폐강
-- [ ] GET `/api/v1/admin/courses/{courseId}/enrollments` — 수강신청 현황 조회
-- [ ] GET `/api/v1/admin/courses/{courseId}/waitlists` — 대기자 명단 조회
-- [ ] GET `/api/v1/admin/stats/enrollments` — 수강신청 현황 통계
+- [x] GET `/api/v1/admin/students` — 전체 학생 목록 조회
+- [x] DELETE `/api/v1/admin/students/{studentId}` — 특정 학생 강제 탈퇴
+- [x] GET `/api/v1/admin/courses` — 전체 강의 목록 조회
+- [x] DELETE `/api/v1/admin/courses/{courseId}` — 특정 강의 강제 폐강
+- [x] GET `/api/v1/admin/courses/{courseId}/enrollments` — 수강신청 현황 조회
+- [x] GET `/api/v1/admin/courses/{courseId}/waitlists` — 대기자 명단 조회
+- [x] GET `/api/v1/admin/stats/enrollments` — 수강신청 현황 통계
 
 ---
 
@@ -166,12 +172,31 @@
 
 ---
 
+## Phase 11. AWS 배포
+
+- [ ] EKS + ECR — 앱 컨테이너 배포
+- [ ] RDS (MySQL) 연결
+- [ ] ElastiCache (Redis) 연결
+- [ ] MSK 또는 EC2 Kafka + Debezium 연결
+- [ ] EIP 설정 후 공유 (AWS/EC2 정적 IP — 팀원에게 공유)
+
+---
+
+## Phase 12. 부하 테스트
+
+- [ ] NGrinder 로컬 빌드 (네이버 부하 테스트 툴)
+- [ ] 수강신청 폭주 시나리오 부하 테스트 실행
+- [ ] Grafana로 병목 구간 확인 및 개선
+
+---
+
 ## 구현 우선순위 요약
 
 ```
 Phase 1 (기반) → Phase 2 (인증) → Phase 3 (사용자) → Phase 4 (강의)
 → Phase 5 (Kafka/Debezium) → Phase 6 (수강신청) → Phase 7 (대기자)
 → Phase 8 (알림) → Phase 9 (관리자) → Phase 10 (모니터링)
+→ Phase 11 (AWS 배포) → Phase 12 (부하 테스트)
 ```
 
 > Phase 6이 핵심이며 Phase 5 완료 후 진행해야 한다.
