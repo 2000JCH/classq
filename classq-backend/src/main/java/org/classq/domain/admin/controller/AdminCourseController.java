@@ -39,7 +39,7 @@ public class AdminCourseController {
     @GetMapping("/courses/{courseId}/waitlists")
     public ResponseEntity<Page<AdminWaitlistResponseDto>> getWaitlists(
             @PathVariable Long courseId,
-            @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.ASC) Pageable pageable) {
+            @PageableDefault(size = 20, sort = "rank", direction = Sort.Direction.ASC) Pageable pageable) {
         return ResponseEntity.ok(adminCourseService.getWaitlists(courseId, pageable));
     }
 
