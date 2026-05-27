@@ -16,6 +16,8 @@ reviews:
     drafts: false
     base_branches:
       - develop
+  path_filters:
+    - "!.claude/**"
   instructions: |
     모든 리뷰 코멘트와 요약은 반드시 한국어로 작성해주세요.
     릴리스 노트 섹션명은 반드시 다음 이름을 사용하세요:
@@ -32,9 +34,6 @@ reviews:
 code_generation:
   docstrings:
     language: "ko-KR"
-
-path_filters:
-  - "!.claude/**"
 
 chat:
   auto_reply: true
