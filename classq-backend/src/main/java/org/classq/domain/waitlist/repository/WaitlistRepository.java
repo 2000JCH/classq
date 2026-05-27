@@ -2,6 +2,8 @@ package org.classq.domain.waitlist.repository;
 
 import org.classq.domain.waitlist.entity.Waitlist;
 import org.classq.domain.waitlist.entity.WaitlistStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDateTime;
@@ -24,4 +26,7 @@ public interface WaitlistRepository extends JpaRepository<Waitlist, Long> {
 
     // 만료 시간 초과된 NOTIFIED 대기자 목록 (Scheduler용)
     List<Waitlist> findByWaitlistStatusAndExpiredAtBeforeAndDeletedAtIsNull(WaitlistStatus status, LocalDateTime now);
+
+    // 특정 강의의 soft delete 되지 않은 대기자 목록 페이징 조회 (rank 오름차순)
+    Page<Waitlist> findByCourse_IdAndDeletedAtIsNullOrderByRankAsc(Long courseId, Pageable pageable);
 }
