@@ -1,6 +1,9 @@
 package org.classq.domain.admin.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.classq.domain.admin.dto.AdminEnrollmentResponseDto;
+import org.classq.domain.admin.dto.AdminWaitlistResponseDto;
+import org.classq.domain.admin.dto.EnrollmentStatsDto;
 import org.classq.domain.admin.service.AdminCourseService;
 import org.classq.domain.course.dto.CourseDto;
 import org.springframework.data.domain.Page;
@@ -22,6 +25,28 @@ public class AdminCourseController {
     public ResponseEntity<Page<CourseDto>> getCourses(
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.ASC) Pageable pageable) {
         return ResponseEntity.ok(adminCourseService.getCourses(pageable));
+    }
+
+    // 수강신청 현황 조회
+    @GetMapping("/courses/{courseId}/enrollments")
+    public ResponseEntity<Page<AdminEnrollmentResponseDto>> getEnrollments(
+            @PathVariable Long courseId,
+            @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.ASC) Pageable pageable) {
+        return ResponseEntity.ok(adminCourseService.getEnrollments(courseId, pageable));
+    }
+
+    // 특정 강의 대기자 명단 조회
+    @GetMapping("/courses/{courseId}/waitlists")
+    public ResponseEntity<Page<AdminWaitlistResponseDto>> getWaitlists(
+            @PathVariable Long courseId,
+            @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.ASC) Pageable pageable) {
+        return ResponseEntity.ok(adminCourseService.getWaitlists(courseId, pageable));
+    }
+
+    // 수강신청 현황 통계
+    @GetMapping("/stats/enrollments")
+    public ResponseEntity<EnrollmentStatsDto> getEnrollmentStats() {
+        return ResponseEntity.ok(adminCourseService.getEnrollmentStats());
     }
 
     // 특정 강의 강제 폐강
