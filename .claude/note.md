@@ -63,6 +63,9 @@ Specification - JPA가 제공하는 동적 쿼리 방식
 필터 조건이 있을 수도 없을 수도 있을때 사용.
 JPQL로 하면 조건마다 if문으로 쿼리 문자열을 이어붙여야 해서 지버분해짐 (가독성이 떨어짐)
 
+*문법
+Specification<T> spec = (root, query, cb) -> /* 조건 */;
+
 .stream()
 리스트를 스트림으로 변환 각 요소를 하나씩 처리할 수 있게 해준다.
 ->  List<CourseSchedule> 반환. 예시로 3개라고 가정
