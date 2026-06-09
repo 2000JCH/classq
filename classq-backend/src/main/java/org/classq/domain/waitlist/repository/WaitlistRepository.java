@@ -1,16 +1,25 @@
 package org.classq.domain.waitlist.repository;
 
+import jakarta.persistence.LockModeType;
 import org.classq.domain.waitlist.entity.Waitlist;
 import org.classq.domain.waitlist.entity.WaitlistStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 public interface WaitlistRepository extends JpaRepository<Waitlist, Long> {
+
+    // 대기자 취소 동시성 보완 — 같은 waitlistId에 중복 취소 요청이 들어올 때 두 번째 요청 차단
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT w FROM Waitlist w WHERE w.id = :id AND w.deletedAt IS NULL")
+    Optional<Waitlist> findByIdForUpdate(@Param("id") Long id);
 
     // rank 1번 WAITING 대기자 조회 (Cancel Consumer에서 사용)
     Optional<Waitlist> findFirstByCourse_IdAndWaitlistStatusAndDeletedAtIsNullOrderByRankAsc(Long courseId, WaitlistStatus status);
