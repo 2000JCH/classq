@@ -13,6 +13,8 @@ import org.classq.domain.enrollment.producer.dto.EnrollmentEvent;
 import org.classq.domain.enrollment.repository.EnrollmentRepository;
 import org.classq.domain.student.entity.Student;
 import org.classq.domain.student.repository.StudentRepository;
+import org.classq.domain.waitlist.entity.WaitlistStatus;
+import org.classq.domain.waitlist.repository.WaitlistRepository;
 import org.classq.global.exception.BusinessException;
 import org.classq.global.exception.ErrorCode;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -34,6 +36,7 @@ public class EnrollmentService {
     private final CourseRepository courseRepository;
     private final CourseScheduleRepository courseScheduleRepository;
     private final EnrollmentRepository enrollmentRepository;
+    private final WaitlistRepository waitlistRepository;
     private final RedisTemplate<String, String> redisTemplate;
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
@@ -57,6 +60,14 @@ public class EnrollmentService {
 
         // 1. 대기자 처리 중 여부
         if (Boolean.TRUE.equals(redisTemplate.hasKey("lock:course:" + courseId))) {
+            throw new BusinessException(ErrorCode.ENROLLMENT_LOCKED);
+        }
+
+        // lock이 아직 안 걸렸더라도 NOTIFIED 대기자가 있으면 그 자리는 대기자 몫
+        boolean hasNotifiedWaitlist = waitlistRepository
+                .findFirstByCourse_IdAndWaitlistStatusAndDeletedAtIsNullOrderByRankAsc(courseId, WaitlistStatus.NOTIFIED)
+                .isPresent();
+        if (hasNotifiedWaitlist) {
             throw new BusinessException(ErrorCode.ENROLLMENT_LOCKED);
         }
 
