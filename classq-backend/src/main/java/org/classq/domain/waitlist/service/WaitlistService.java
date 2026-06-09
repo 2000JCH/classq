@@ -9,6 +9,8 @@ import org.classq.domain.enrollment.service.EnrollmentService;
 import org.classq.domain.notification.entity.Notification;
 import org.classq.domain.notification.entity.NotificationType;
 import org.classq.domain.notification.repository.NotificationRepository;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.transaction.annotation.Transactional;
 import org.classq.domain.student.entity.Student;
 import org.classq.domain.student.repository.StudentRepository;
@@ -25,6 +27,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +40,7 @@ public class WaitlistService {
     private final NotificationRepository notificationRepository;
     private final EnrollmentService enrollmentService;
     private final RedisTemplate<String, String> redisTemplate;
+    private final RedissonClient redissonClient;
 
     // 내 대기 목록 조회
     public WaitlistListResponseDto getMyWaitlists(Long accountId) {
@@ -99,21 +103,36 @@ public class WaitlistService {
             throw new BusinessException(ErrorCode.WAITLIST_CLOSED);
         }
 
-        // 4. rank 계산 (현재 활성 대기자 수 + 1)
-        int rank = waitlistRepository.countByCourse_IdAndWaitlistStatusInAndDeletedAtIsNull(
-                courseId, List.of(WaitlistStatus.WAITING, WaitlistStatus.NOTIFIED)) + 1;
-
-        // 5. RDS INSERT (실패 시 Redis 슬롯 복구)
+        // 4. 분산 락으로 rank 계산 + INSERT 직렬화 (rank 중복 방지)
+        RLock lock = redissonClient.getLock("waitlist-rank:course:" + courseId);
         try {
-            Waitlist waitlist = waitlistRepository.save(
-                    Waitlist.builder()
-                            .student(student)
-                            .course(course)
-                            .rank(rank)
-                            .build()
-            );
-            return new WaitlistResponseDto(waitlist.getId(), courseId, course.getName(), rank, WaitlistStatus.WAITING);
-        } catch (Exception e) {
+            if (!lock.tryLock(5, 3, TimeUnit.SECONDS)) {
+                redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
+                throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+            }
+            try {
+                int rank = waitlistRepository.countByCourse_IdAndWaitlistStatusInAndDeletedAtIsNull(
+                        courseId, List.of(WaitlistStatus.WAITING, WaitlistStatus.NOTIFIED)) + 1;
+
+                Waitlist waitlist = waitlistRepository.save(
+                        Waitlist.builder()
+                                .student(student)
+                                .course(course)
+                                .rank(rank)
+                                .build()
+                );
+                return new WaitlistResponseDto(waitlist.getId(), courseId, course.getName(), rank, WaitlistStatus.WAITING);
+            } catch (BusinessException e) {
+                redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
+                throw e;
+            } catch (Exception e) {
+                redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
+                throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+            } finally {
+                lock.unlock();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
