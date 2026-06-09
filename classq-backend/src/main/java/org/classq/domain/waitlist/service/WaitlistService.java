@@ -212,9 +212,8 @@ public class WaitlistService {
         Student student = studentRepository.findByAccountIdAndDeletedAtIsNull(accountId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
 
-        // 2. 대기 건 조회
-        Waitlist waitlist = waitlistRepository.findById(waitlistId)
-                .filter(w -> w.getDeletedAt() == null)
+        // 2. 대기 건 조회 (비관적 락 — 중복 취소 요청 차단)
+        Waitlist waitlist = waitlistRepository.findByIdForUpdate(waitlistId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.WAITLIST_NOT_FOUND));
 
         // 3. 본인 대기 건인지 확인
