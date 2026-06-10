@@ -67,7 +67,7 @@ public class AccountController {
      *
      * **/
     @PostMapping("/refresh")
-    public ResponseEntity<TokenResponseDto> refresh(@CookieValue(name = "refreshToken") String refreshToken) {
+    public ResponseEntity<TokenResponseDto> refresh(@CookieValue(name = "refreshToken", required = false) String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_TOKEN);
         }
