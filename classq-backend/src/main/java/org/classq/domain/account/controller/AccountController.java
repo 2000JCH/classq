@@ -9,12 +9,14 @@ import org.classq.domain.account.service.AccountService;
 import org.classq.global.auth.jwt.JwtUtil;
 import org.classq.global.exception.BusinessException;
 import org.classq.global.exception.ErrorCode;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -37,7 +39,10 @@ public class AccountController {
     @PostMapping("/login")
     public ResponseEntity<TokenResponseDto> login(@RequestBody @Valid LoginRequestDto request) {
         TokenResponseDto response = accountService.login(request);
-        return ResponseEntity.ok(response);
+        ResponseCookie cookie = buildRefreshCookie(response.getRefreshToken(), jwtUtil.getRefreshTokenExpiration() / 1000);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(response);
     }
 
     //로그아웃
@@ -45,7 +50,10 @@ public class AccountController {
     public ResponseEntity<Void> logout() {
         Long accountId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         accountService.logout(accountId);
-        return ResponseEntity.ok().build();
+        ResponseCookie cookie = buildRefreshCookie("", 0);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .build();
     }
 
     /**
@@ -59,11 +67,20 @@ public class AccountController {
      *
      * **/
     @PostMapping("/refresh")
-    public ResponseEntity<TokenResponseDto> refresh(@RequestHeader("Authorization") String bearer) {
-        String refreshToken = jwtUtil.extractToken(bearer);
-        if (refreshToken == null) {
+    public ResponseEntity<TokenResponseDto> refresh(@CookieValue(name = "refreshToken") String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
             throw new BusinessException(ErrorCode.INVALID_TOKEN);
         }
         return ResponseEntity.ok(accountService.refresh(refreshToken));
+    }
+
+    private ResponseCookie buildRefreshCookie(String value, long maxAgeSeconds) {
+        return ResponseCookie.from("refreshToken", value)
+                .httpOnly(true)
+                .secure(true)
+                .path("/api/v1/auth")
+                .maxAge(maxAgeSeconds)
+                .sameSite("Strict")
+                .build();
     }
 }
