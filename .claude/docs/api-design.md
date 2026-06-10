@@ -8,14 +8,24 @@ Base URL은 `/api/v1`로 통일한다. 모든 인증이 필요한 요청은 `Aut
 
 ## 인증 (Auth)
 
-인증 API는 JWT 발급과 갱신을 담당한다. 로그인 성공 시 access token(단기)과 refresh token(장기, 7일)을 함께 발급한다. access token 만료 시 `/auth/refresh`로 재발급한다. 로그아웃 시 Redis에서 refresh token을 즉시 DEL하여 재발급을 차단한다.
+인증 API는 JWT 발급과 갱신을 담당한다. 로그인 성공 시 access token은 response body로, refresh token은 httpOnly Cookie(`Set-Cookie`)로 내려준다. access token 만료 시 `/auth/refresh`로 재발급한다. 로그아웃 시 Redis에서 refresh token을 즉시 DEL하고 쿠키도 삭제한다.
 
 | 메서드 | 엔드포인트 | 설명 | 권한 |
 |---|---|---|---|
 | POST | /api/v1/auth/signup | 회원가입 | 없음 |
-| POST | /api/v1/auth/login | 로그인 (JWT 발급) | 없음 |
-| POST | /api/v1/auth/logout | 로그아웃 (Redis refresh token 삭제) | 인증 필요 |
-| POST | /api/v1/auth/refresh | access token 재발급 | 없음 |
+| POST | /api/v1/auth/login | 로그인 (access token body 반환 + refresh token httpOnly cookie 설정) | 없음 |
+| POST | /api/v1/auth/logout | 로그아웃 (Redis refresh token 삭제 + cookie 삭제) | 인증 필요 |
+| POST | /api/v1/auth/refresh | access token 재발급 (Cookie의 refresh token 사용) | 없음 |
+
+**로그인 성공 응답**
+```
+Response Body: { "accessToken": "eyJhbGci..." }
+Set-Cookie: refreshToken=eyJhbGci...; HttpOnly; Path=/api/v1/auth/refresh; SameSite=Strict; Max-Age=604800
+```
+
+**access token 재발급**
+- 요청 시 별도 헤더 불필요 — 브라우저가 쿠키를 자동으로 전송
+- 응답: `{ "accessToken": "eyJhbGci..." }`
 
 ---
 
@@ -146,12 +156,24 @@ Base URL은 `/api/v1`로 통일한다. 모든 인증이 필요한 요청은 `Aut
 
 ## 알림 (Notification)
 
-알림은 수강신청 관련 이벤트(대기자 알림, 강의 폐강 등)가 발생할 때 Consumer가 notification 테이블에 INSERT한다. 읽음 처리 시 read_at을 현재 시각으로 UPDATE한다.
+알림은 수강신청 관련 이벤트(대기자 알림, 강의 폐강 등)가 발생할 때 Consumer가 notification 테이블에 INSERT한다. 읽음 처리 시 read_at을 현재 시각으로 UPDATE한다. 실시간 알림은 SSE(Server-Sent Events) 방식으로 전달한다.
 
 | 메서드 | 엔드포인트 | 설명 | 권한 |
 |---|---|---|---|
 | GET | /api/v1/notifications | 내 알림 목록 조회 | STUDENT |
 | PATCH | /api/v1/notifications/{notificationId}/read | 알림 읽음 처리 (read_at 갱신) | STUDENT |
+| GET | /api/v1/notifications/subscribe | SSE 연결 (실시간 알림 수신) | STUDENT |
+
+**SSE 연결 (`GET /api/v1/notifications/subscribe`)**
+- 클라이언트가 연결을 열면 서버가 연결을 유지하며 이벤트 발생 시 즉시 Push
+- 대기자 순번 알림(WAITLIST_AVAILABLE), 강의 폐강 알림(COURSE_CLOSED) 수신
+- 연결 유지: 30초마다 heartbeat 전송 (연결 끊김 방지)
+- 재연결: 네트워크 끊김 시 브라우저가 자동으로 재연결 시도
+
+```
+Content-Type: text/event-stream
+data: {"type":"WAITLIST_AVAILABLE","notificationId":1,"message":"대기 수락 가능합니다. 10분 내에 수락하세요."}
+```
 
 ---
 

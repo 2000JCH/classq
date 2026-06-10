@@ -8,12 +8,36 @@ ClassQ는 JWT(JSON Web Token) 기반 Stateless 인증을 사용한다. 세션을
 
 ## 토큰 종류
 
-| 구분 | 수명 | 용도 | Redis 저장 |
-|---|---|---|---|
-| Access Token | 30분 | 모든 인증 필요 API 호출 | X |
-| Refresh Token | 7일 | Access Token 재발급 전용 | O (`refresh:token:{accountId}`) |
+| 구분 | 수명 | 용도 | Redis 저장 | 클라이언트 저장 |
+|---|---|---|---|---|
+| Access Token | 30분 | 모든 인증 필요 API 호출 | X | 메모리 (Zustand store) |
+| Refresh Token | 7일 | Access Token 재발급 전용 | O (`refresh:token:{accountId}`) | httpOnly Cookie |
 
 두 토큰은 같은 `secretKey`로 서명하므로 `typ` 클레임으로 구분한다.
+
+---
+
+## 클라이언트 토큰 저장 전략
+
+**Access Token → 메모리 (Zustand store)**
+- JS에서 읽어 `Authorization: Bearer` 헤더에 직접 담아 전송
+- 탭 닫거나 새로고침 시 사라짐 → 페이지 로드 시 refresh token으로 자동 재발급
+- XSS 공격으로 탈취 불가 (localStorage와 달리 디스크에 저장되지 않음)
+
+**Refresh Token → httpOnly Cookie**
+- 백엔드가 로그인 응답 시 `Set-Cookie` 헤더로 내려줌
+- JS에서 `document.cookie`로 접근 불가 → XSS 탈취 불가
+- `/auth/refresh` 호출 시 브라우저가 자동으로 쿠키를 담아 전송
+- Cookie 설정: `HttpOnly; Path=/api/v1/auth/refresh; SameSite=Strict; Max-Age=604800`
+
+**프론트엔드 흐름:**
+```
+1. 로그인 → access token 메모리 저장, refresh token httpOnly cookie로 자동 저장
+2. API 요청 → Authorization: Bearer {access token} 헤더 전송
+3. 새로고침 → 메모리 초기화 → /auth/refresh 자동 호출 → access token 재발급
+4. access token 만료(30분) → axios interceptor가 /auth/refresh 호출 → 재시도
+5. refresh token 만료(7일) → 재발급 불가 → 로그인 페이지 이동
+```
 
 ---
 
@@ -124,18 +148,20 @@ refresh token을 일반 API에 사용하면 `isAccessToken()`에서 false가 반
 2. access token 생성
 3. refresh token 생성
 4. Redis SET refresh:token:{accountId} = refreshToken (TTL 7일)
-5. { accessToken, refreshToken } 응답
+5. 응답:
+   - response body: { accessToken }
+   - Set-Cookie: refreshToken={refreshToken}; HttpOnly; Path=/api/v1/auth/refresh; SameSite=Strict; Max-Age=604800
 ```
 
 ### Access Token 재발급 (`POST /api/v1/auth/refresh`)
 
 ```
-1. Authorization: Bearer {refreshToken} 헤더 추출
+1. Cookie에서 refreshToken 추출 (브라우저가 자동으로 전송)
 2. isRefreshToken() → typ = "refresh" 확인 (실패 시 INVALID_TOKEN)
 3. getAccountId() → accountId 추출
 4. Redis GET refresh:token:{accountId} → 저장된 토큰과 일치 확인 (불일치 시 UNAUTHORIZED)
 5. account 조회 → 새 access token 생성
-6. { newAccessToken, refreshToken } 응답
+6. response body: { accessToken }  (refresh token은 기존 cookie 유지)
 ```
 
 ### 로그아웃 (`POST /api/v1/auth/logout`)
@@ -143,7 +169,8 @@ refresh token을 일반 API에 사용하면 `isAccessToken()`에서 false가 반
 ```
 1. JwtFilter에서 SecurityContext에 저장된 accountId 조회
 2. Redis DEL refresh:token:{accountId}
-3. 이후 refresh token으로 재발급 시도 시 UNAUTHORIZED 응답
+3. Set-Cookie: refreshToken=; Max-Age=0  (쿠키 즉시 삭제)
+4. 이후 refresh token으로 재발급 시도 시 UNAUTHORIZED 응답
 ```
 
 ---

@@ -23,6 +23,10 @@
 
 - [x] POST `/api/v1/auth/signup` — 회원가입
 - [x] POST `/api/v1/auth/login` — 로그인 (access token + refresh token 발급, Redis SET)
+- [ ] 토큰 저장 방식 변경 — refresh token을 httpOnly Cookie로 전달하도록 수정
+  - 로그인: response body `{ accessToken }` + `Set-Cookie: refreshToken` (HttpOnly)
+  - `/auth/refresh`: Authorization 헤더 → Cookie에서 refresh token 읽도록 변경
+  - `/auth/logout`: Redis DEL + Cookie 삭제 (`Max-Age=0`)
 - [x] POST `/api/v1/auth/logout` — 로그아웃 (Redis refresh token DEL)
 - [x] POST `/api/v1/auth/refresh` — access token 재발급 (Redis GET으로 유효성 검증)
 - [x] JWT 토큰 타입 클레임 추가 — access/refresh 토큰 구별 검증 (JwtUtil, JwtFilter, AccountService)
@@ -122,21 +126,37 @@
 - [x] POST `/api/v1/waitlists/{waitlistId}/accept` — 대기 수락
   - 학점 초과 / 시간 중복 체크 → 실패 시 status = EXPIRED → 다음 순번으로
   - 성공 시: `DECR enrollment:course:{id}` + Kafka 발행 + `DEL lock:course:{id}`
-  - ⚠️ enroll() 진입 시 NOTIFIED 대기자 존재하면 차단 로직 추가 필요 (race condition 보완)
+  - ✅ enroll() 진입 시 NOTIFIED 대기자 존재하면 차단 로직 추가 (race condition 보완 완료)
 - [x] POST `/api/v1/waitlists/{waitlistId}/reject` — 대기 거절 → 다음 순번으로
 - [x] Scheduler (1분 주기) — expired_at 초과 NOTIFIED 대기자 처리
   - status = EXPIRED
   - 다음 순번 있으면: 잠금 유지 + 알림 발송
   - 다음 순번 없으면: `DEL lock:course:{id}`
-  - ⚠️ EnrollmentCancelConsumer 멱등성 보완 필요 (Kafka 재처리 시 중복 CANCELLED/NOTIFIED/Notification 방지)
+  - ✅ EnrollmentCancelConsumer 멱등성 보완 완료 (Kafka 재처리 시 중복 CANCELLED/NOTIFIED/Notification 방지)
 
 ### 보완 필요 항목
-- [ ] `enroll()` 진입 시 NOTIFIED 대기자 존재하면 차단 — lock 세팅 전 타이밍에 일반 수강신청이 끼어드는 race condition 방지
-- [ ] `EnrollmentCancelConsumer` 멱등성 보완 — Kafka 재처리 시 CANCELLED 중복, NOTIFIED/Notification 중복 생성 방지
-- [ ] 대기자 취소 동시성 보완 — `findByIdForUpdate` 비관적 락(`PESSIMISTIC_WRITE`) 적용
-  - 동일 waitlistId에 거의 동시에 두 cancel 요청이 들어오면 두 트랜잭션 모두 상태 검증(WAITING/NOTIFIED)을 통과한 뒤 각각 Redis increment를 호출하여 슬롯이 +2 되는 문제 발생 가능
+- [x] `enroll()` 진입 시 NOTIFIED 대기자 존재하면 차단
+  - **문제**: 수강신청 취소 처리 시 Redis 슬롯 +1은 됐는데, lock을 걸기 직전 타이밍에 일반 수강신청이 그 슬롯을 낚아채는 문제
+  - 대기자는 "자리 났으니 10분 내에 수락하세요" 알림을 받았는데 실제로는 자리가 없는 상태가 됨
+  - **해결**: `enroll()` 진입 시 NOTIFIED 상태 대기자가 있으면 `ENROLLMENT_LOCKED` 거절
+- [x] `EnrollmentCancelConsumer` 멱등성 보완
+  - **문제**: Kafka는 같은 메시지를 두 번 이상 전달할 수 있음 (at-least-once). Consumer가 처리 중 crash 후 재기동되면 같은 메시지를 다시 처리해서 CANCELLED 중복, NOTIFIED/Notification 중복 생성 가능
+  - **해결**: enrollment가 이미 CANCELLED이면 early return / 이미 NOTIFIED 대기자가 존재하면 알림 발송 블록 전체 skip
+- [ ] `EnrollmentCancelConsumer` TOCTOU 경쟁 조건 보완 (coderabbit Major)
+  - **문제**: 수강 중인 학생 A, B가 거의 동시에 수강신청을 취소하면 Consumer 2개가 동시에 처리됨. 둘 다 "NOTIFIED 대기자 없음"을 확인하고 둘 다 대기자 1순위 C한테 알림을 발송 → C가 알림을 2번 받고, 2순위 D는 알림을 못 받음
+  - **해결**: 1순위 WAITING 대기자 조회 시 DB 락(`@Lock(LockModeType.PESSIMISTIC_WRITE)`) 적용 → Consumer A가 락을 잡는 동안 Consumer B는 대기 → A가 C에게 알림 발송 후 커밋 → B가 실행되면 C는 이미 NOTIFIED라 WAITING 대기자가 없음 → B는 D에게 알림 발송
+- [x] 대기자 취소 동시성 보완 — 개인이 같은 요청을 동시에 2번 이상 발송했을 때 문제 (WaitlistService)
+  - **문제**: 같은 사람이 취소 버튼을 동시에 두 번 누르면, 커밋 전이라 두 트랜잭션 모두 WAITING 상태를 읽고 통과함. 실제 취소건수는 1건인데 Redis 슬롯은 +2가 됨 → 없는 자리가 생겨버림
   - soft delete라 DB UNIQUE 제약으로도 보호 안 됨
-- [ ] 대기자 등록 동시성 보완 — `exists → count+1 → save` 비원자적 구간으로 rank 중복 및 중복 등록 가능 (Redisson 분산 락 또는 DB 시퀀스로 rank 관리 검토)
+  - **해결 방향**: `findByIdForUpdate` 비관적 락(`PESSIMISTIC_WRITE`) 적용
+- [x] 대기자 등록 동시성 보완 — 여러 명이 동시에 대기 등록을 눌렀을 때 문제
+  - **문제**: rank를 `현재 활성 대기자 수 + 1`로 계산하는데, 여러 명이 동시에 count를 조회하면 같은 값을 읽어 같은 rank가 두 명 이상에게 부여됨 (예: c, d 둘 다 rank=3)
+  - **동작 방식**: 현재 활성 대기자 수 조회 + 1 = 내 rank
+    - a(rank=1), b(rank=2) 있는 상태에서 c가 등록 → count = 2 → c의 rank = 3
+    - 학생 c: count 조회 → 2 → rank=3 예정
+    - 학생 d: count 조회 → 2 → rank=3 예정 (c가 아직 INSERT 전)
+    - c: rank=3 INSERT, d: rank=3 INSERT → rank 3이 두 명
+  - **해결 방향**: Redisson 분산 락으로 강의별 직렬화 또는 DB 시퀀스로 rank 관리
 
 ---
 
@@ -144,6 +164,10 @@
 
 - [x] GET `/api/v1/notifications` — 내 알림 목록 조회
 - [x] PATCH `/api/v1/notifications/{notificationId}/read` — 읽음 처리 (read_at 갱신)
+- [ ] GET `/api/v1/notifications/subscribe` — SSE 연결 (실시간 알림 Push)
+  - 대기자 순번 알림(WAITLIST_AVAILABLE), 강의 폐강 알림(COURSE_CLOSED) 수신
+  - 30초마다 heartbeat 전송 (연결 끊김 방지)
+  - Polling 대비 RDS 부하 감소 (이벤트 발생 시에만 쿼리)
   - ⚠️ `markAsRead()` 멱등성 문제 (coderabbit Minor) — 보완 완료
     - **문제**: `readAt`을 null 체크 없이 매번 덮어써서 최초 읽음 시각이 유실됨
     - **해결**: `readAt == null`일 때만 갱신하도록 null 체크 추가
@@ -167,8 +191,17 @@
 
 ## Phase 10. 모니터링
 
-- [ ] Prometheus 메트릭 설정 (API 응답시간, Kafka Consumer lag, RDS 커넥션 수)
-- [ ] Grafana 대시보드 연동 (Prometheus + CloudWatch 통합)
+- [x] `build.gradle` + `application.yml` — Actuator + Micrometer Prometheus 설정
+- [x] `docker/prometheus.yml` 작성 — Spring Boot 앱 scrape 설정
+- [x] `docker-compose.yml` 수정 — Prometheus + Grafana 서비스 추가
+- [x] Grafana 대시보드 구성
+  - API 엔드포인트별 응답시간 (P95 포함)
+  - Kafka Consumer lag (`enrollment-processor` 그룹)
+  - HikariCP 활성/대기 커넥션 수
+
+### 논의 필요
+- [ ] 설정 파일 디렉토리 구조 결정 — 현재 `docker/`에 Debezium, Prometheus 설정 혼재. `infra/`로 분리할지 `docker/`로 유지할지 팀 논의 필요
+  - infra/ — Prometheus, Grafana, Kafka 설정 등 인프라 관련 파일을 통으로 묶는 방식. 규모가 커질수록 선호
 
 ---
 
@@ -179,6 +212,12 @@
 - [ ] ElastiCache (Redis) 연결
 - [ ] MSK 또는 EC2 Kafka + Debezium 연결
 - [ ] EIP 설정 후 공유 (AWS/EC2 정적 IP — 팀원에게 공유)
+- [ ] CloudWatch 연동
+  - EKS Container Insights 활성화 (노드 CPU/메모리, Pod 상태)
+  - RDS 슬로우 쿼리 / 커넥션 / CPU 메트릭
+  - ElastiCache 메모리 / 커넥션 메트릭
+  - MSK 사용 시 Kafka Consumer lag
+  - Grafana에 CloudWatch 데이터 소스 추가
 
 ---
 
