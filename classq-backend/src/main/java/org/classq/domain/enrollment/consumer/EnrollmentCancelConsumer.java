@@ -15,6 +15,7 @@ import org.classq.domain.notification.repository.NotificationRepository;
 import org.classq.domain.waitlist.entity.Waitlist;
 import org.classq.domain.waitlist.entity.WaitlistStatus;
 import org.classq.domain.waitlist.repository.WaitlistRepository;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
@@ -58,7 +60,9 @@ public class EnrollmentCancelConsumer {
         enrollment.cancel();
 
         // 2. 대기자 확인 → 있으면 NOTIFIED 처리 + 알림 저장
-        Optional<Waitlist> waitlistOpt = waitlistRepository.findFirstByCourse_IdAndWaitlistStatusAndDeletedAtIsNullOrderByRankAsc(event.getCourseId(), WaitlistStatus.WAITING);
+        // 비관적 락 적용 — 동시에 2개 취소 이벤트 처리 시 같은 대기자에게 중복 알림 방지 (TOCTOU)
+        List<Waitlist> waitingList = waitlistRepository.findTopWaitingByCourseIdForUpdate(event.getCourseId(), WaitlistStatus.WAITING, PageRequest.of(0, 1));
+        Optional<Waitlist> waitlistOpt = waitingList.stream().findFirst();
 
         // 멱등성 보완 — 이미 NOTIFIED 대기자가 있으면 중복 알림 발송 방지
         boolean alreadyNotified = waitlistRepository

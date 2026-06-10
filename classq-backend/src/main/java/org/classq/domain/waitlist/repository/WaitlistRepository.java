@@ -24,6 +24,11 @@ public interface WaitlistRepository extends JpaRepository<Waitlist, Long> {
     // rank 1번 WAITING 대기자 조회 (Cancel Consumer에서 사용)
     Optional<Waitlist> findFirstByCourse_IdAndWaitlistStatusAndDeletedAtIsNullOrderByRankAsc(Long courseId, WaitlistStatus status);
 
+    // rank 1번 WAITING 대기자 조회 + 비관적 락 (Cancel Consumer TOCTOU 방지)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT w FROM Waitlist w WHERE w.course.id = :courseId AND w.waitlistStatus = :status AND w.deletedAt IS NULL ORDER BY w.rank ASC")
+    List<Waitlist> findTopWaitingByCourseIdForUpdate(@Param("courseId") Long courseId, @Param("status") WaitlistStatus status, Pageable pageable);
+
     // 이미 대기 신청 여부 확인
     boolean existsByCourse_IdAndStudent_IdAndWaitlistStatusInAndDeletedAtIsNull(Long courseId, Long studentId, List<WaitlistStatus> statuses);
 
