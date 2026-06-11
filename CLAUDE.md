@@ -155,6 +155,7 @@ Consumer 그룹: `enrollment-processor` / Producer: `acks=all` / Consumer: `enab
 | `db-design.md` | 9개 테이블 DDL 전문, 각 테이블 설계 의도, 테이블 관계도, soft delete 적용 여부 기준 |
 | `api-design.md` | 모든 엔드포인트 목록, 요청/응답 JSON 예시, 필터 파라미터, 에러 코드 전체 목록 |
 | `redis-design.md` | Redis 키별 초기화/갱신/삭제 시점, AOF 설정 이유, 장애 복구 방법 |
+| `frontend-design.md` | 프론트엔드 스택, CORS 설정, 토큰 관리 전략, SSE 연결 방식, axios interceptor |
 
 ## 협업 방식
 

@@ -169,6 +169,7 @@ Set-Cookie: refreshToken=eyJhbGci...; HttpOnly; Path=/api/v1/auth/refresh; SameS
 - 대기자 순번 알림(WAITLIST_AVAILABLE), 강의 폐강 알림(COURSE_CLOSED) 수신
 - 연결 유지: 30초마다 heartbeat 전송 (연결 끊김 방지)
 - 재연결: 네트워크 끊김 시 브라우저가 자동으로 재연결 시도
+- 프론트엔드 연결 방식: `@microsoft/fetch-event-source` 라이브러리 사용 — 기본 EventSource API는 커스텀 헤더를 지원하지 않아 `Authorization: Bearer {token}` 전송이 불가능하기 때문
 
 ```
 Content-Type: text/event-stream
