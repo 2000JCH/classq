@@ -9,6 +9,9 @@ import org.classq.domain.enrollment.service.EnrollmentService;
 import org.classq.domain.notification.entity.Notification;
 import org.classq.domain.notification.entity.NotificationType;
 import org.classq.domain.notification.repository.NotificationRepository;
+import org.classq.domain.notification.service.SseEmitterService;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +41,7 @@ public class WaitlistService {
     private final EnrollmentRepository enrollmentRepository;
     private final WaitlistRepository waitlistRepository;
     private final NotificationRepository notificationRepository;
+    private final SseEmitterService sseEmitterService;
     private final EnrollmentService enrollmentService;
     private final RedisTemplate<String, String> redisTemplate;
     private final RedissonClient redissonClient;
@@ -211,7 +215,7 @@ public class WaitlistService {
         if (nextOpt.isPresent()) {
             Waitlist next = nextOpt.get();
             next.notified();
-            notificationRepository.save(
+            Notification notification = notificationRepository.save(
                     Notification.builder()
                             .student(next.getStudent())
                             .course(next.getCourse())
@@ -219,6 +223,14 @@ public class WaitlistService {
                             .message("수강 신청 자리가 생겼습니다. 10분 내에 수락해 주세요.")
                             .build()
             );
+
+            Long studentId = next.getStudent().getId();
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    sseEmitterService.send(studentId, notification);
+                }
+            });
         } else {
             redisTemplate.delete("lock:course:" + courseId);
         }

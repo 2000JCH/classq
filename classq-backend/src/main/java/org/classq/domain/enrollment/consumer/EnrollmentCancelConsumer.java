@@ -12,6 +12,7 @@ import org.classq.global.exception.ErrorCode;
 import org.classq.domain.notification.entity.Notification;
 import org.classq.domain.notification.entity.NotificationType;
 import org.classq.domain.notification.repository.NotificationRepository;
+import org.classq.domain.notification.service.SseEmitterService;
 import org.classq.domain.waitlist.entity.Waitlist;
 import org.classq.domain.waitlist.entity.WaitlistStatus;
 import org.classq.domain.waitlist.repository.WaitlistRepository;
@@ -35,6 +36,7 @@ public class EnrollmentCancelConsumer {
     private final EnrollmentRepository enrollmentRepository;
     private final WaitlistRepository waitlistRepository;
     private final NotificationRepository notificationRepository;
+    private final SseEmitterService sseEmitterService;
     private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
 
@@ -73,7 +75,7 @@ public class EnrollmentCancelConsumer {
             Waitlist waitlist = waitlistOpt.get();
             waitlist.notified();
 
-            notificationRepository.save(
+            Notification notification = notificationRepository.save(
                     Notification.builder()
                             .student(waitlist.getStudent())
                             .course(waitlist.getCourse())
@@ -82,12 +84,15 @@ public class EnrollmentCancelConsumer {
                             .build()
             );
 
-            // Redis lock 설정 (새 수강신청 차단)
+            Long studentId = waitlist.getStudent().getId();
+
+            // 커밋 후 Redis lock 설정 + SSE 전송 (커밋 전 전송 시 DB에 없는 알림을 클라이언트가 조회하는 문제 방지)
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
-                public void afterCommit() { // 커밋 후 실행할 작업
+                public void afterCommit() {
                     // TTL 15분: 수락 시간(10분) + Scheduler 처리 여유 / Scheduler 장애 시 자동 해제 안전망
                     redisTemplate.opsForValue().set("lock:course:" + event.getCourseId(), "1", 15, TimeUnit.MINUTES);
+                    sseEmitterService.send(studentId, notification);
                 }
             });
         }
