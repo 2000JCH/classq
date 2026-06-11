@@ -3,6 +3,7 @@ package org.classq.domain.notification.service;
 import lombok.extern.slf4j.Slf4j;
 import org.classq.domain.notification.entity.Notification;
 import org.classq.domain.notification.entity.NotificationType;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -50,24 +51,23 @@ public class SseEmitterService {
                     .name(resolveEventName(notification.getNotificationType()))
                     .data(notification.getMessage()));
         } catch (IOException e) {
-            log.warn("SSE 전송 실패 - studentId: {}", studentId);
+            log.warn("SSE 전송 실패 - studentId: {}", studentId, e);
             emitters.remove(studentId);
             emitter.completeWithError(e);
         }
     }
 
-    public void sendHeartbeat(Long studentId) {
-        SseEmitter emitter = emitters.get(studentId);
-        if (emitter == null) {
-            return;
-        }
-
-        try {
-            emitter.send(SseEmitter.event().name("heartbeat").data(""));
-        } catch (IOException e) {
-            emitters.remove(studentId);
-            emitter.completeWithError(e);
-        }
+    @Scheduled(fixedRate = HEARTBEAT_INTERVAL)
+    public void sendHeartbeatToAll() {
+        emitters.forEach((studentId, emitter) -> {
+            try {
+                emitter.send(SseEmitter.event().name("heartbeat").data(""));
+            } catch (IOException e) {
+                log.warn("SSE heartbeat 전송 실패 - studentId: {}", studentId, e);
+                emitters.remove(studentId);
+                emitter.completeWithError(e);
+            }
+        });
     }
 
     private String resolveEventName(NotificationType type) {
