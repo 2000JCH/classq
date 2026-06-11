@@ -23,7 +23,7 @@
 
 - [x] POST `/api/v1/auth/signup` — 회원가입
 - [x] POST `/api/v1/auth/login` — 로그인 (access token + refresh token 발급, Redis SET)
-- [ ] 토큰 저장 방식 변경 — refresh token을 httpOnly Cookie로 전달하도록 수정
+- [x] 토큰 저장 방식 변경 — refresh token을 httpOnly Cookie로 전달하도록 수정
   - 로그인: response body `{ accessToken }` + `Set-Cookie: refreshToken` (HttpOnly)
   - `/auth/refresh`: Authorization 헤더 → Cookie에서 refresh token 읽도록 변경
   - `/auth/logout`: Redis DEL + Cookie 삭제 (`Max-Age=0`)
@@ -142,7 +142,7 @@
 - [x] `EnrollmentCancelConsumer` 멱등성 보완
   - **문제**: Kafka는 같은 메시지를 두 번 이상 전달할 수 있음 (at-least-once). Consumer가 처리 중 crash 후 재기동되면 같은 메시지를 다시 처리해서 CANCELLED 중복, NOTIFIED/Notification 중복 생성 가능
   - **해결**: enrollment가 이미 CANCELLED이면 early return / 이미 NOTIFIED 대기자가 존재하면 알림 발송 블록 전체 skip
-- [ ] `EnrollmentCancelConsumer` TOCTOU 경쟁 조건 보완 (coderabbit Major)
+- [x] `EnrollmentCancelConsumer` TOCTOU 경쟁 조건 보완 (coderabbit Major)
   - **문제**: 수강 중인 학생 A, B가 거의 동시에 수강신청을 취소하면 Consumer 2개가 동시에 처리됨. 둘 다 "NOTIFIED 대기자 없음"을 확인하고 둘 다 대기자 1순위 C한테 알림을 발송 → C가 알림을 2번 받고, 2순위 D는 알림을 못 받음
   - **해결**: 1순위 WAITING 대기자 조회 시 DB 락(`@Lock(LockModeType.PESSIMISTIC_WRITE)`) 적용 → Consumer A가 락을 잡는 동안 Consumer B는 대기 → A가 C에게 알림 발송 후 커밋 → B가 실행되면 C는 이미 NOTIFIED라 WAITING 대기자가 없음 → B는 D에게 알림 발송
 - [x] 대기자 취소 동시성 보완 — 개인이 같은 요청을 동시에 2번 이상 발송했을 때 문제 (WaitlistService)
@@ -164,7 +164,7 @@
 
 - [x] GET `/api/v1/notifications` — 내 알림 목록 조회
 - [x] PATCH `/api/v1/notifications/{notificationId}/read` — 읽음 처리 (read_at 갱신)
-- [ ] GET `/api/v1/notifications/subscribe` — SSE 연결 (실시간 알림 Push)
+- [x] GET `/api/v1/notifications/subscribe` — SSE 연결 (실시간 알림 Push)
   - 대기자 순번 알림(WAITLIST_AVAILABLE), 강의 폐강 알림(COURSE_CLOSED) 수신
   - 30초마다 heartbeat 전송 (연결 끊김 방지)
   - Polling 대비 RDS 부하 감소 (이벤트 발생 시에만 쿼리)
