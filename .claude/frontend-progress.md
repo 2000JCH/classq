@@ -39,10 +39,10 @@
 
 - [x] 강의 목록 페이지 — courseType / classType / classMode / departmentId 필터
 - [x] 강의 상세 페이지 — 강의 정보 + 시간표
-- [ ] 수강신청 — POST `/api/v1/enrollments`
-- [ ] 수강신청 취소 — DELETE `/api/v1/enrollments/{enrollmentId}`
-- [ ] 대기자 등록 — POST `/api/v1/waitlists`
-- [ ] 대기자 취소 — DELETE `/api/v1/waitlists/{waitlistId}`
+- [x] 수강신청 — POST `/api/v1/enrollments`
+- [x] 수강신청 취소 — DELETE `/api/v1/enrollments/{enrollmentId}`
+- [x] 대기자 등록 — POST `/api/v1/waitlists`
+- [x] 대기자 취소 — DELETE `/api/v1/waitlists/{waitlistId}`
 - [ ] 대기 수락 — POST `/api/v1/waitlists/{waitlistId}/accept`
 - [ ] 대기 거절 — POST `/api/v1/waitlists/{waitlistId}/reject`
 - [ ] 내 수강신청 목록 페이지 — GET `/api/v1/enrollments/me`
