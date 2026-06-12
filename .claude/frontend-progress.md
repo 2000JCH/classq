@@ -54,13 +54,13 @@
 
 ## Phase 5. 알림 (SSE)
 
-- [ ] SSE 연결 훅 구현 (`features/notification/hooks/useSSE.ts`)
+- [x] SSE 연결 훅 구현 (`features/notification/hooks/useSSE.ts`)
   - `@microsoft/fetch-event-source` 사용
   - `Authorization: Bearer {token}` 헤더 포함
   - 연결 끊김 시 자동 재연결
-- [ ] 실시간 알림 수신 — WAITLIST_AVAILABLE / COURSE_CLOSED
-- [ ] 알림 목록 페이지 — GET `/api/v1/notifications`
-- [ ] 읽음 처리 — PATCH `/api/v1/notifications/{notificationId}/read`
+- [x] 실시간 알림 수신 — WAITLIST_AVAILABLE / COURSE_CLOSED
+- [x] 알림 목록 페이지 — GET `/api/v1/notifications`
+- [x] 읽음 처리 — PATCH `/api/v1/notifications/{notificationId}/read`
 
 ---
 
