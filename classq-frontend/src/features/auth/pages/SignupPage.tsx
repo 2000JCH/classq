@@ -54,7 +54,7 @@ export default function SignupPage() {
           <CardTitle className="text-2xl text-center">회원가입</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-1">
               <Label htmlFor="email">이메일</Label>
               <Input id="email" type="email" placeholder="이메일" {...register('email')} />

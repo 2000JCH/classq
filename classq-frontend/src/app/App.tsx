@@ -14,11 +14,22 @@ export default function App() {
       return
     }
 
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 5000)
+
     axios
-      .post('/api/v1/auth/refresh', {}, { withCredentials: true })
+      .post('/api/v1/auth/refresh', {}, { withCredentials: true, signal: controller.signal })
       .then(({ data }) => setAuth(data.accessToken))
       .catch(() => {})
-      .finally(() => setReady(true))
+      .finally(() => {
+        clearTimeout(timer)
+        setReady(true)
+      })
+
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
   }, [])
 
   if (!ready) return null
