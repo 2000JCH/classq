@@ -32,18 +32,21 @@ export default function CoursesPage() {
   const [totalPages, setTotalPages] = useState(0)
   const [filters, setFilters] = useState<CourseFilters>({ page: 0, size: 20 })
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
-    getDepartments().then(setDepartments)
+    getDepartments().then(setDepartments).catch(() => {})
   }, [])
 
   useEffect(() => {
     setLoading(true)
+    setError(false)
     getCourses(filters)
       .then((res) => {
         setCourses(res.content)
         setTotalPages(res.totalPages)
       })
+      .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [filters])
 
@@ -105,6 +108,8 @@ export default function CoursesPage() {
 
       {loading ? (
         <p className="text-center text-gray-500 py-10">로딩 중...</p>
+      ) : error ? (
+        <p className="text-center text-red-500 py-10">강의 목록을 불러오지 못했습니다.</p>
       ) : (
         <>
           <div className="border rounded-lg overflow-hidden">

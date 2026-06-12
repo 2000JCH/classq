@@ -63,6 +63,12 @@ export default function CourseDetailPage() {
     if (!courseId) return
     const id = Number(courseId)
 
+    setCourse(null)
+    setSchedules([])
+    setError(false)
+    setLoading(true)
+    setActionMessage(null)
+
     Promise.all([getCourse(id), getCourseSchedules(id)])
       .then(([courseData, schedulesData]) => {
         setCourse(courseData)

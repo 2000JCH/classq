@@ -33,12 +33,15 @@ export default function MyProfilePage() {
     formState: { errors, isSubmitting, isDirty },
   } = useForm<FormData>({ resolver: zodResolver(schema) })
 
+  const [loadError, setLoadError] = useState(false)
+
   useEffect(() => {
     getMyProfile()
       .then((data) => {
         setProfile(data)
         reset({ name: data.name, grade: data.grade })
       })
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false))
   }, [reset])
 
@@ -69,7 +72,7 @@ export default function MyProfilePage() {
   }
 
   if (loading) return <p className="text-center text-gray-500 py-20">로딩 중...</p>
-  if (!profile) return null
+  if (loadError || !profile) return <p className="text-center text-red-500 py-20">정보를 불러오지 못했습니다.</p>
 
   return (
     <div className="max-w-lg mx-auto p-6 space-y-8">
