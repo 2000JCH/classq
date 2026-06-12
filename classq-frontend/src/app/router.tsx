@@ -1,10 +1,12 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import PrivateRoute from '@/shared/components/PrivateRoute'
 import RoleRoute from '@/shared/components/RoleRoute'
+import LoginPage from '@/features/auth/pages/LoginPage'
+import SignupPage from '@/features/auth/pages/SignupPage'
 
 const router = createBrowserRouter([
-  { path: '/login', element: <div>Login</div> },
-  { path: '/signup', element: <div>Signup</div> },
+  { path: '/login', element: <LoginPage /> },
+  { path: '/signup', element: <SignupPage /> },
   {
     element: <PrivateRoute />,
     children: [
