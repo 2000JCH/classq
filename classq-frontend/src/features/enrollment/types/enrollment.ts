@@ -13,6 +13,14 @@ export interface WaitlistRequest {
   courseId: number
 }
 
+export interface EnrollmentItem {
+  enrollmentId: number
+  courseId: number
+  courseName: string
+  credits: number
+  status: 'COMPLETED' | 'CANCELLED'
+}
+
 export type WaitlistStatus = 'WAITING' | 'NOTIFIED' | 'EXPIRED' | 'COMPLETED'
 
 export interface WaitlistItem {

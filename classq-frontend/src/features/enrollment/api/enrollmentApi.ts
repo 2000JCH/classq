@@ -1,5 +1,6 @@
 import api from '@/shared/api/axiosInstance'
 import type {
+  EnrollmentItem,
   EnrollmentRequest,
   EnrollmentResult,
   MyWaitlistsResponse,
@@ -33,5 +34,10 @@ export async function rejectWaitlist(waitlistId: number): Promise<void> {
 
 export async function getMyWaitlists(): Promise<MyWaitlistsResponse> {
   const { data } = await api.get('/waitlists/me')
+  return data
+}
+
+export async function getMyEnrollments(): Promise<EnrollmentItem[]> {
+  const { data } = await api.get('/enrollments/me')
   return data
 }

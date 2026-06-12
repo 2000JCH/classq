@@ -6,6 +6,7 @@ import SignupPage from '@/features/auth/pages/SignupPage'
 import CoursesPage from '@/features/course/pages/CoursesPage'
 import CourseDetailPage from '@/features/course/pages/CourseDetailPage'
 import MyWaitlistsPage from '@/features/enrollment/pages/MyWaitlistsPage'
+import MyEnrollmentsPage from '@/features/enrollment/pages/MyEnrollmentsPage'
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -19,7 +20,7 @@ const router = createBrowserRouter([
       {
         element: <RoleRoute allowedRoles={['STUDENT']} />,
         children: [
-          { path: '/enrollments/me', element: <div>MyEnrollments</div> },
+          { path: '/enrollments/me', element: <MyEnrollmentsPage /> },
           { path: '/waitlists/me', element: <MyWaitlistsPage /> },
           { path: '/notifications', element: <div>Notifications</div> },
         ],
