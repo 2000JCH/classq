@@ -3,6 +3,11 @@ import PrivateRoute from '@/shared/components/PrivateRoute'
 import RoleRoute from '@/shared/components/RoleRoute'
 import LoginPage from '@/features/auth/pages/LoginPage'
 import SignupPage from '@/features/auth/pages/SignupPage'
+import CoursesPage from '@/features/course/pages/CoursesPage'
+import CourseDetailPage from '@/features/course/pages/CourseDetailPage'
+import MyWaitlistsPage from '@/features/enrollment/pages/MyWaitlistsPage'
+import MyEnrollmentsPage from '@/features/enrollment/pages/MyEnrollmentsPage'
+import MyProfilePage from '@/features/student/pages/MyProfilePage'
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -11,14 +16,15 @@ const router = createBrowserRouter([
     element: <PrivateRoute />,
     children: [
       { path: '/', element: <Navigate to="/courses" replace /> },
-      { path: '/courses', element: <div>CourseList</div> },
-      { path: '/courses/:courseId', element: <div>CourseDetail</div> },
+      { path: '/courses', element: <CoursesPage /> },
+      { path: '/courses/:courseId', element: <CourseDetailPage /> },
       {
         element: <RoleRoute allowedRoles={['STUDENT']} />,
         children: [
-          { path: '/enrollments/me', element: <div>MyEnrollments</div> },
-          { path: '/waitlists/me', element: <div>MyWaitlists</div> },
+          { path: '/enrollments/me', element: <MyEnrollmentsPage /> },
+          { path: '/waitlists/me', element: <MyWaitlistsPage /> },
           { path: '/notifications', element: <div>Notifications</div> },
+          { path: '/profile', element: <MyProfilePage /> },
         ],
       },
       {

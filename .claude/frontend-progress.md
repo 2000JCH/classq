@@ -37,18 +37,18 @@
 
 ## Phase 4. 학생
 
-- [ ] 강의 목록 페이지 — courseType / classType / classMode / departmentId 필터
-- [ ] 강의 상세 페이지 — 강의 정보 + 시간표
-- [ ] 수강신청 — POST `/api/v1/enrollments`
-- [ ] 수강신청 취소 — DELETE `/api/v1/enrollments/{enrollmentId}`
-- [ ] 대기자 등록 — POST `/api/v1/waitlists`
-- [ ] 대기자 취소 — DELETE `/api/v1/waitlists/{waitlistId}`
-- [ ] 대기 수락 — POST `/api/v1/waitlists/{waitlistId}/accept`
-- [ ] 대기 거절 — POST `/api/v1/waitlists/{waitlistId}/reject`
-- [ ] 내 수강신청 목록 페이지 — GET `/api/v1/enrollments/me`
-- [ ] 내 대기 목록 페이지 — GET `/api/v1/waitlists/me`
-- [ ] 내 정보 조회/수정 페이지 — GET/PUT `/api/v1/students/me`
-- [ ] 회원 탈퇴 — DELETE `/api/v1/students/me`
+- [x] 강의 목록 페이지 — courseType / classType / classMode / departmentId 필터
+- [x] 강의 상세 페이지 — 강의 정보 + 시간표
+- [x] 수강신청 — POST `/api/v1/enrollments`
+- [x] 수강신청 취소 — DELETE `/api/v1/enrollments/{enrollmentId}`
+- [x] 대기자 등록 — POST `/api/v1/waitlists`
+- [x] 대기자 취소 — DELETE `/api/v1/waitlists/{waitlistId}`
+- [x] 대기 수락 — POST `/api/v1/waitlists/{waitlistId}/accept`
+- [x] 대기 거절 — POST `/api/v1/waitlists/{waitlistId}/reject`
+- [x] 내 수강신청 목록 페이지 — GET `/api/v1/enrollments/me`
+- [x] 내 대기 목록 페이지 — GET `/api/v1/waitlists/me`
+- [x] 내 정보 조회/수정 페이지 — GET/PUT `/api/v1/students/me`
+- [x] 회원 탈퇴 — DELETE `/api/v1/students/me`
 
 ---
 
