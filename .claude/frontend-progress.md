@@ -37,8 +37,8 @@
 
 ## Phase 4. 학생
 
-- [ ] 강의 목록 페이지 — courseType / classType / classMode / departmentId 필터
-- [ ] 강의 상세 페이지 — 강의 정보 + 시간표
+- [x] 강의 목록 페이지 — courseType / classType / classMode / departmentId 필터
+- [x] 강의 상세 페이지 — 강의 정보 + 시간표
 - [ ] 수강신청 — POST `/api/v1/enrollments`
 - [ ] 수강신청 취소 — DELETE `/api/v1/enrollments/{enrollmentId}`
 - [ ] 대기자 등록 — POST `/api/v1/waitlists`
