@@ -10,6 +10,8 @@ import MyWaitlistsPage from '@/features/enrollment/pages/MyWaitlistsPage'
 import MyEnrollmentsPage from '@/features/enrollment/pages/MyEnrollmentsPage'
 import MyProfilePage from '@/features/student/pages/MyProfilePage'
 import NotificationsPage from '@/features/notification/pages/NotificationsPage'
+import CourseFormPage from '@/features/course/pages/CourseFormPage'
+import ProfessorProfilePage from '@/features/professor/pages/ProfessorProfilePage'
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -35,8 +37,9 @@ const router = createBrowserRouter([
           {
             element: <RoleRoute allowedRoles={['PROFESSOR']} />,
             children: [
-              { path: '/professor/courses/new', element: <div>CreateCourse</div> },
-              { path: '/professor/courses/:courseId/edit', element: <div>EditCourse</div> },
+              { path: '/professor/courses/new', element: <CourseFormPage /> },
+              { path: '/professor/courses/:courseId/edit', element: <CourseFormPage /> },
+              { path: '/professor/profile', element: <ProfessorProfilePage /> },
             ],
           },
           {

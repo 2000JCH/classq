@@ -62,3 +62,23 @@ export interface CourseFilters {
   page: number
   size: number
 }
+
+export interface CourseScheduleRequest {
+  day: DayOfWeek
+  startTime: string
+  endTime: string
+}
+
+export interface CourseCreateRequest {
+  name: string
+  courseType: CourseType
+  classType: ClassType
+  classMode: ClassMode
+  departmentId?: number
+  credits: number
+  capacity: number
+  waitlistLimit: number
+  minGrade?: number
+  maxGrade?: number
+  schedules: CourseScheduleRequest[]
+}

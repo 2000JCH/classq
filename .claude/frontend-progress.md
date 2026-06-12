@@ -66,10 +66,10 @@
 
 ## Phase 6. 교수
 
-- [ ] 강의 등록 페이지 — POST `/api/v1/courses`
-- [ ] 강의 수정 페이지 — PUT `/api/v1/courses/{courseId}`
-- [ ] 강의 폐강 — DELETE `/api/v1/courses/{courseId}`
-- [ ] 내 정보 조회/수정 페이지 — GET/PUT `/api/v1/professors/me`
+- [x] 강의 등록 페이지 — POST `/api/v1/courses`
+- [x] 강의 수정 페이지 — PUT `/api/v1/courses/{courseId}`
+- [x] 강의 폐강 — DELETE `/api/v1/courses/{courseId}`
+- [x] 내 정보 조회/수정 페이지 — GET/PUT `/api/v1/professors/me`
 
 ---
 
