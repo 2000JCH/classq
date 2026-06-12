@@ -43,10 +43,10 @@
 - [x] 수강신청 취소 — DELETE `/api/v1/enrollments/{enrollmentId}`
 - [x] 대기자 등록 — POST `/api/v1/waitlists`
 - [x] 대기자 취소 — DELETE `/api/v1/waitlists/{waitlistId}`
-- [ ] 대기 수락 — POST `/api/v1/waitlists/{waitlistId}/accept`
-- [ ] 대기 거절 — POST `/api/v1/waitlists/{waitlistId}/reject`
+- [x] 대기 수락 — POST `/api/v1/waitlists/{waitlistId}/accept`
+- [x] 대기 거절 — POST `/api/v1/waitlists/{waitlistId}/reject`
 - [ ] 내 수강신청 목록 페이지 — GET `/api/v1/enrollments/me`
-- [ ] 내 대기 목록 페이지 — GET `/api/v1/waitlists/me`
+- [x] 내 대기 목록 페이지 — GET `/api/v1/waitlists/me`
 - [ ] 내 정보 조회/수정 페이지 — GET/PUT `/api/v1/students/me`
 - [ ] 회원 탈퇴 — DELETE `/api/v1/students/me`
 

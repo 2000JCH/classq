@@ -1,5 +1,10 @@
 import api from '@/shared/api/axiosInstance'
-import type { EnrollmentRequest, EnrollmentResult, WaitlistRequest } from '../types/enrollment'
+import type {
+  EnrollmentRequest,
+  EnrollmentResult,
+  MyWaitlistsResponse,
+  WaitlistRequest,
+} from '../types/enrollment'
 
 export async function enroll(req: EnrollmentRequest): Promise<EnrollmentResult> {
   const { data } = await api.post('/enrollments', req)
@@ -16,4 +21,17 @@ export async function joinWaitlist(req: WaitlistRequest): Promise<void> {
 
 export async function cancelWaitlist(waitlistId: number): Promise<void> {
   await api.delete(`/waitlists/${waitlistId}`)
+}
+
+export async function acceptWaitlist(waitlistId: number): Promise<void> {
+  await api.post(`/waitlists/${waitlistId}/accept`)
+}
+
+export async function rejectWaitlist(waitlistId: number): Promise<void> {
+  await api.post(`/waitlists/${waitlistId}/reject`)
+}
+
+export async function getMyWaitlists(): Promise<MyWaitlistsResponse> {
+  const { data } = await api.get('/waitlists/me')
+  return data
 }
