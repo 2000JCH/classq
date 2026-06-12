@@ -7,6 +7,7 @@ import CoursesPage from '@/features/course/pages/CoursesPage'
 import CourseDetailPage from '@/features/course/pages/CourseDetailPage'
 import MyWaitlistsPage from '@/features/enrollment/pages/MyWaitlistsPage'
 import MyEnrollmentsPage from '@/features/enrollment/pages/MyEnrollmentsPage'
+import MyProfilePage from '@/features/student/pages/MyProfilePage'
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -23,6 +24,7 @@ const router = createBrowserRouter([
           { path: '/enrollments/me', element: <MyEnrollmentsPage /> },
           { path: '/waitlists/me', element: <MyWaitlistsPage /> },
           { path: '/notifications', element: <div>Notifications</div> },
+          { path: '/profile', element: <MyProfilePage /> },
         ],
       },
       {
