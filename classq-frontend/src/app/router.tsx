@@ -12,6 +12,11 @@ import MyProfilePage from '@/features/student/pages/MyProfilePage'
 import NotificationsPage from '@/features/notification/pages/NotificationsPage'
 import CourseFormPage from '@/features/course/pages/CourseFormPage'
 import ProfessorProfilePage from '@/features/professor/pages/ProfessorProfilePage'
+import AdminStudentsPage from '@/features/admin/pages/AdminStudentsPage'
+import AdminCoursesPage from '@/features/admin/pages/AdminCoursesPage'
+import AdminCourseEnrollmentsPage from '@/features/admin/pages/AdminCourseEnrollmentsPage'
+import AdminCourseWaitlistsPage from '@/features/admin/pages/AdminCourseWaitlistsPage'
+import AdminStatsPage from '@/features/admin/pages/AdminStatsPage'
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -45,11 +50,11 @@ const router = createBrowserRouter([
           {
             element: <RoleRoute allowedRoles={['ADMIN']} />,
             children: [
-              { path: '/admin/students', element: <div>AdminStudents</div> },
-              { path: '/admin/courses', element: <div>AdminCourses</div> },
-              { path: '/admin/courses/:courseId/enrollments', element: <div>AdminEnrollments</div> },
-              { path: '/admin/courses/:courseId/waitlists', element: <div>AdminWaitlists</div> },
-              { path: '/admin/stats', element: <div>AdminStats</div> },
+              { path: '/admin/students', element: <AdminStudentsPage /> },
+              { path: '/admin/courses', element: <AdminCoursesPage /> },
+              { path: '/admin/courses/:courseId/enrollments', element: <AdminCourseEnrollmentsPage /> },
+              { path: '/admin/courses/:courseId/waitlists', element: <AdminCourseWaitlistsPage /> },
+              { path: '/admin/stats', element: <AdminStatsPage /> },
             ],
           },
         ],

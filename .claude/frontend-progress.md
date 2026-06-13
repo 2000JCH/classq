@@ -75,10 +75,10 @@
 
 ## Phase 7. 관리자
 
-- [ ] 학생 목록 페이지 — GET `/api/v1/admin/students`
-- [ ] 학생 강제 탈퇴 — DELETE `/api/v1/admin/students/{studentId}`
-- [ ] 강의 목록 페이지 — GET `/api/v1/admin/courses`
-- [ ] 강의 강제 폐강 — DELETE `/api/v1/admin/courses/{courseId}`
-- [ ] 수강신청 현황 페이지 — GET `/api/v1/admin/courses/{courseId}/enrollments`
-- [ ] 대기자 명단 페이지 — GET `/api/v1/admin/courses/{courseId}/waitlists`
-- [ ] 수강신청 통계 페이지 — GET `/api/v1/admin/stats/enrollments`
+- [x] 학생 목록 페이지 — GET `/api/v1/admin/students`
+- [x] 학생 강제 탈퇴 — DELETE `/api/v1/admin/students/{studentId}`
+- [x] 강의 목록 페이지 — GET `/api/v1/admin/courses`
+- [x] 강의 강제 폐강 — DELETE `/api/v1/admin/courses/{courseId}`
+- [x] 수강신청 현황 페이지 — GET `/api/v1/admin/courses/{courseId}/enrollments`
+- [x] 대기자 명단 페이지 — GET `/api/v1/admin/courses/{courseId}/waitlists`
+- [x] 수강신청 통계 페이지 — GET `/api/v1/admin/stats/enrollments`
