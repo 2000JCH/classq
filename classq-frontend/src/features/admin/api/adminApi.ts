@@ -10,7 +10,7 @@ import type {
 
 export async function getAdminStudents(): Promise<AdminStudent[]> {
   const { data } = await api.get('/admin/students')
-  return data
+  return data.content ?? data
 }
 
 export async function forceDeleteStudent(studentId: number): Promise<void> {
@@ -19,7 +19,7 @@ export async function forceDeleteStudent(studentId: number): Promise<void> {
 
 export async function getAdminCourses(): Promise<AdminCourse[]> {
   const { data } = await api.get('/admin/courses')
-  return data
+  return data.content ?? data
 }
 
 export async function forceCloseCourse(courseId: number): Promise<void> {

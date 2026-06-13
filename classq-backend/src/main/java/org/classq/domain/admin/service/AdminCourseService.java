@@ -105,6 +105,7 @@ public class AdminCourseService {
                 course.getClassMode(),
                 course.getCredits(),
                 course.getCapacity(),
+                course.getCapacity(), // remainingCapacity: 관리자 화면은 Redis 조회 없이 정원 그대로 표시
                 course.getMinGrade(),
                 course.getMaxGrade(),
                 course.getCourseStatus()
