@@ -66,6 +66,7 @@ public class CourseService {
                 course.getClassMode(),
                 course.getCredits(),
                 course.getCapacity(),
+                getRemainingCapacity(course),
                 course.getWaitlistLimit(),
                 course.getMinGrade(),
                 course.getMaxGrade(),
@@ -170,10 +171,19 @@ public class CourseService {
                 course.getClassMode(),
                 course.getCredits(),
                 course.getCapacity(),
+                getRemainingCapacity(course),
                 course.getMinGrade(),
                 course.getMaxGrade(),
                 course.getCourseStatus()
         );
+    }
+
+    private int getRemainingCapacity(Course course) {
+        String value = redisTemplate.opsForValue().get("enrollment:course:" + course.getId());
+        if (value != null) {
+            return Math.max(0, Integer.parseInt(value));
+        }
+        return course.getCapacity();
     }
 
     // Specification 문법 / JPA가 제공하는 동적 쿼리 방식
