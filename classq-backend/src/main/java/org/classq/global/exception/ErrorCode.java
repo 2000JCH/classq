@@ -14,6 +14,7 @@ public enum ErrorCode {
     TOKEN_EXPIRED(401, "만료된 토큰입니다."),
     UNAUTHORIZED(401, "인증이 필요합니다."),
     LOGIN_FAILED(401, "이메일 또는 비밀번호가 올바르지 않습니다."),
+    ACCOUNT_PENDING(403, "관리자 승인 대기 중입니다."),
     FORBIDDEN(403, "접근 권한이 없습니다."),
     STUDENT_NOT_FOUND(404,"학생을 찾을 수 없습니다."),
     PROFESSOR_NOT_FOUND(404,"교수를 찾을 수 없습니다."),

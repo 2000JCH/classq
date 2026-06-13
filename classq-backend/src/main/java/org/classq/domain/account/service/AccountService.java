@@ -5,6 +5,7 @@ import org.classq.domain.account.dto.LoginRequestDto;
 import org.classq.domain.account.dto.SignupRequestDto;
 import org.classq.domain.account.dto.TokenResponseDto;
 import org.classq.domain.account.entity.Account;
+import org.classq.domain.account.entity.AccountStatus;
 import org.classq.domain.account.entity.Role;
 import org.classq.domain.account.repository.AccountRepository;
 import org.classq.domain.department.entity.Department;
@@ -51,10 +52,13 @@ public class AccountService {
         Department department = departmentRepository.findById(request.getDepartmentId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
 
+        AccountStatus status = request.getRole() == Role.PROFESSOR ? AccountStatus.PENDING : AccountStatus.ACTIVE;
+
         Account account = Account.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(request.getRole())
+                .status(status)
                 .build();
         accountRepository.save(account);
 
@@ -86,6 +90,10 @@ public class AccountService {
 
         if (!passwordEncoder.matches(request.getPassword(), account.getPassword())) {
             throw new BusinessException(ErrorCode.LOGIN_FAILED);
+        }
+
+        if (account.getStatus() == AccountStatus.PENDING) {
+            throw new BusinessException(ErrorCode.ACCOUNT_PENDING);
         }
 
         String accessToken = jwtUtil.createAccessToken(account.getId(), account.getRole().name());

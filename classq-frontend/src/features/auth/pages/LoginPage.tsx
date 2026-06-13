@@ -34,8 +34,13 @@ export default function LoginPage() {
       const { data: res } = await api.post('/auth/login', data)
       setAuth(res.accessToken)
       navigate('/', { replace: true })
-    } catch {
-      setError('root', { message: '이메일 또는 비밀번호가 올바르지 않습니다.' })
+    } catch (err: unknown) {
+      const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
+      if (code === 'ACCOUNT_PENDING') {
+        setError('root', { message: '관리자 승인 대기 중입니다.' })
+      } else {
+        setError('root', { message: '이메일 또는 비밀번호가 올바르지 않습니다.' })
+      }
     }
   }
 
