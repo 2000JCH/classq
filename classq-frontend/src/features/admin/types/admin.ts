@@ -38,3 +38,10 @@ export interface EnrollmentStats {
   totalCount: number
   cancelledCount: number
 }
+
+export interface PendingProfessor {
+  accountId: number
+  email: string
+  name: string
+  departmentName: string
+}

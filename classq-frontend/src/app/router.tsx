@@ -17,6 +17,7 @@ import AdminCoursesPage from '@/features/admin/pages/AdminCoursesPage'
 import AdminCourseEnrollmentsPage from '@/features/admin/pages/AdminCourseEnrollmentsPage'
 import AdminCourseWaitlistsPage from '@/features/admin/pages/AdminCourseWaitlistsPage'
 import AdminStatsPage from '@/features/admin/pages/AdminStatsPage'
+import AdminProfessorsPage from '@/features/admin/pages/AdminProfessorsPage'
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -55,6 +56,7 @@ const router = createBrowserRouter([
               { path: '/admin/courses/:courseId/enrollments', element: <AdminCourseEnrollmentsPage /> },
               { path: '/admin/courses/:courseId/waitlists', element: <AdminCourseWaitlistsPage /> },
               { path: '/admin/stats', element: <AdminStatsPage /> },
+              { path: '/admin/professors', element: <AdminProfessorsPage /> },
             ],
           },
         ],

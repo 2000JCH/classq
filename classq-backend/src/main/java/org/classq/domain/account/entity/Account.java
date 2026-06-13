@@ -24,4 +24,12 @@ public class Account extends BaseEntity{
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private Role role;
+
+    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    private AccountStatus status;
+
+    public void approve() {
+        this.status = AccountStatus.ACTIVE;
+    }
 }

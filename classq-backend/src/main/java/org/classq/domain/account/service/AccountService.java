@@ -5,8 +5,15 @@ import org.classq.domain.account.dto.LoginRequestDto;
 import org.classq.domain.account.dto.SignupRequestDto;
 import org.classq.domain.account.dto.TokenResponseDto;
 import org.classq.domain.account.entity.Account;
+import org.classq.domain.account.entity.AccountStatus;
 import org.classq.domain.account.entity.Role;
 import org.classq.domain.account.repository.AccountRepository;
+import org.classq.domain.department.entity.Department;
+import org.classq.domain.department.repository.DepartmentRepository;
+import org.classq.domain.professor.entity.Professor;
+import org.classq.domain.professor.repository.ProfessorRepository;
+import org.classq.domain.student.entity.Student;
+import org.classq.domain.student.repository.StudentRepository;
 import org.classq.global.auth.jwt.JwtUtil;
 import org.classq.global.exception.BusinessException;
 import org.classq.global.exception.ErrorCode;
@@ -22,6 +29,9 @@ import java.util.concurrent.TimeUnit;
 public class AccountService {
 
     private final AccountRepository accountRepository;
+    private final StudentRepository studentRepository;
+    private final ProfessorRepository professorRepository;
+    private final DepartmentRepository departmentRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final RedisTemplate<String, String> redisTemplate;
@@ -39,12 +49,36 @@ public class AccountService {
             throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
+        Department department = departmentRepository.findById(request.getDepartmentId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
+
+        AccountStatus status = request.getRole() == Role.PROFESSOR ? AccountStatus.PENDING : AccountStatus.ACTIVE;
+
         Account account = Account.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(request.getRole())
+                .status(status)
                 .build();
         accountRepository.save(account);
+
+        if (request.getRole() == Role.STUDENT) {
+            if (request.getGrade() == null) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT);
+            }
+            studentRepository.save(Student.builder()
+                    .account(account)
+                    .department(department)
+                    .name(request.getName())
+                    .grade(request.getGrade())
+                    .build());
+        } else if (request.getRole() == Role.PROFESSOR) {
+            professorRepository.save(Professor.builder()
+                    .account(account)
+                    .department(department)
+                    .name(request.getName())
+                    .build());
+        }
     }
 
     //로그인
@@ -56,6 +90,10 @@ public class AccountService {
 
         if (!passwordEncoder.matches(request.getPassword(), account.getPassword())) {
             throw new BusinessException(ErrorCode.LOGIN_FAILED);
+        }
+
+        if (account.getStatus() == AccountStatus.PENDING) {
+            throw new BusinessException(ErrorCode.ACCOUNT_PENDING);
         }
 
         String accessToken = jwtUtil.createAccessToken(account.getId(), account.getRole().name());

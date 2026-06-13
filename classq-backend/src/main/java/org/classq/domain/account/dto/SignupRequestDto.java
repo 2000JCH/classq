@@ -21,4 +21,12 @@ public class SignupRequestDto {
 
     @NotNull
     private Role role;
+
+    @NotBlank
+    private String name;
+
+    @NotNull
+    private Long departmentId;
+
+    private Integer grade; // 학생만 필수
 }

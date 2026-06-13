@@ -5,6 +5,7 @@ import type {
   AdminStudent,
   AdminWaitlistItem,
   EnrollmentStats,
+  PendingProfessor,
 } from '../types/admin'
 
 export async function getAdminStudents(): Promise<AdminStudent[]> {
@@ -38,4 +39,13 @@ export async function getAdminCourseWaitlists(courseId: number): Promise<AdminWa
 export async function getEnrollmentStats(): Promise<EnrollmentStats> {
   const { data } = await api.get('/admin/stats/enrollments')
   return data
+}
+
+export async function getPendingProfessors(): Promise<PendingProfessor[]> {
+  const { data } = await api.get('/admin/accounts/pending')
+  return data
+}
+
+export async function approveProfessor(accountId: number): Promise<void> {
+  await api.patch(`/admin/accounts/${accountId}/approve`)
 }
