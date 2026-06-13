@@ -181,7 +181,11 @@ public class CourseService {
     private int getRemainingCapacity(Course course) {
         String value = redisTemplate.opsForValue().get("enrollment:course:" + course.getId());
         if (value != null) {
-            return Math.max(0, Integer.parseInt(value));
+            try {
+                return Math.max(0, Integer.parseInt(value));
+            } catch (NumberFormatException e) {
+                return course.getCapacity();
+            }
         }
         return course.getCapacity();
     }
