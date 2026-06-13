@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getCourses, getDepartments } from '../api/courseApi'
+import { useAuthStore } from '@/shared/store/authStore'
 import type {
   ClassMode,
   ClassType,
@@ -27,6 +28,7 @@ const CLASS_MODE_LABELS: Record<ClassMode, string> = {
 }
 
 export default function CoursesPage() {
+  const role = useAuthStore((state) => state.role)
   const [courses, setCourses] = useState<CourseListItem[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [totalPages, setTotalPages] = useState(0)
@@ -56,7 +58,17 @@ export default function CoursesPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6">강의 목록</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">강의 목록</h1>
+        {role === 'PROFESSOR' && (
+          <Link
+            to="/professor/courses/new"
+            className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+          >
+            강의 등록
+          </Link>
+        )}
+      </div>
 
       <div className="flex flex-wrap gap-3 mb-6">
         <select
