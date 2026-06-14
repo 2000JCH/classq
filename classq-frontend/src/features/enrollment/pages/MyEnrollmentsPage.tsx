@@ -6,16 +6,13 @@ import type { EnrollmentItem } from '../types/enrollment'
 
 export default function MyEnrollmentsPage() {
   const [enrollments, setEnrollments] = useState<EnrollmentItem[]>([])
-  const [totalCredits, setTotalCredits] = useState(0)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState<number | null>(null)
 
   async function load() {
     try {
       const data = await getMyEnrollments()
-      const active = data.filter((e) => e.status === 'COMPLETED')
-      setEnrollments(active)
-      setTotalCredits(active.reduce((sum, e) => sum + e.credits, 0))
+      setEnrollments(data.filter((e) => e.status === 'COMPLETED'))
     } finally {
       setLoading(false)
     }
@@ -25,13 +22,19 @@ export default function MyEnrollmentsPage() {
     load()
   }, [])
 
+  const majorCredits = enrollments
+    .filter((e) => e.courseType === 'MAJOR_REQUIRED' || e.courseType === 'MAJOR_ELECTIVE')
+    .reduce((sum, e) => sum + e.credits, 0)
+  const liberalCredits = enrollments
+    .filter((e) => e.courseType === 'LIBERAL_ARTS')
+    .reduce((sum, e) => sum + e.credits, 0)
+  const totalCredits = majorCredits + liberalCredits
+
   async function handleCancel(enrollmentId: number) {
     setSubmitting(enrollmentId)
     try {
       await cancelEnrollment(enrollmentId)
-      const removed = enrollments.find((e) => e.enrollmentId === enrollmentId)
       setEnrollments((prev) => prev.filter((e) => e.enrollmentId !== enrollmentId))
-      if (removed) setTotalCredits((prev) => prev - removed.credits)
     } catch {
       alert('취소에 실패했습니다.')
     } finally {
@@ -45,7 +48,11 @@ export default function MyEnrollmentsPage() {
     <div className="max-w-3xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-2">내 수강신청 목록</h1>
       <p className="text-sm text-gray-500 mb-6">
-        신청 학점: <span className="font-medium">{totalCredits}학점</span>
+        전공: <span className="font-medium">{majorCredits}학점</span>
+        {' · '}
+        교양: <span className="font-medium">{liberalCredits}학점</span>
+        {' · '}
+        총 신청학점: <span className="font-medium">{totalCredits}학점</span>
       </p>
 
       {enrollments.length === 0 ? (
