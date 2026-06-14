@@ -20,6 +20,7 @@ import org.classq.global.exception.ErrorCode;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalTime;
 import java.util.List;
@@ -120,6 +121,7 @@ public class EnrollmentService {
     }
 
     // 수강신청 취소
+    @Transactional
     public void cancel(Long accountId, Long enrollmentId) {
         Student student = studentRepository.findByAccountIdAndDeletedAtIsNull(accountId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
