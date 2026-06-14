@@ -130,13 +130,14 @@ export default function CoursesPage() {
                   <th className="px-4 py-3 text-left font-medium text-gray-600">방식</th>
                   <th className="px-4 py-3 text-right font-medium text-gray-600">학점</th>
                   <th className="px-4 py-3 text-right font-medium text-gray-600">잔여석</th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-600">대기석</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">상태</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {courses.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-10 text-center text-gray-400">
+                    <td colSpan={9} className="px-4 py-10 text-center text-gray-400">
                       강의가 없습니다.
                     </td>
                   </tr>
@@ -171,6 +172,19 @@ export default function CoursesPage() {
                         >
                           {course.remainingCapacity}/{course.capacity}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {course.waitlistLimit === 0 ? (
+                          <span className="text-gray-400">-</span>
+                        ) : (
+                          <span
+                            className={
+                              course.remainingWaitlist === 0 ? 'text-red-500' : 'text-yellow-600'
+                            }
+                          >
+                            {course.remainingWaitlist}/{course.waitlistLimit}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span

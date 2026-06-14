@@ -148,13 +148,23 @@ export default function CourseDetailPage() {
 
       <div className="flex items-start justify-between mb-6">
         <h1 className="text-2xl font-bold">{course.name}</h1>
-        <span
-          className={`text-sm px-3 py-1 rounded-full ${
-            course.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-          }`}
-        >
-          {course.status === 'ACTIVE' ? '신청 가능' : '마감'}
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className={`text-sm px-3 py-1 rounded-full ${
+              course.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+            }`}
+          >
+            {course.status === 'ACTIVE' ? '신청 가능' : '마감'}
+          </span>
+          {role === 'PROFESSOR' && (
+            <Link
+              to={`/professor/courses/${courseId}/edit`}
+              className="text-sm px-3 py-1 rounded border border-gray-300 hover:bg-gray-50"
+            >
+              수정
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="border rounded-lg divide-y mb-6">

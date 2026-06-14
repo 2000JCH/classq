@@ -22,6 +22,8 @@ export interface CourseListItem {
   credits: number
   capacity: number
   remainingCapacity: number
+  waitlistLimit: number
+  remainingWaitlist: number
   status: CourseStatus
 }
 
