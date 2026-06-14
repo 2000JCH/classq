@@ -45,7 +45,7 @@ public class AccountService {
         }
 
         //중복체크
-        if (accountRepository.findByEmail(request.getEmail()).isPresent()) {
+        if (accountRepository.findByEmailAndDeletedAtIsNull(request.getEmail()).isPresent()) {
             throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
@@ -85,7 +85,7 @@ public class AccountService {
     @Transactional
     public TokenResponseDto login(LoginRequestDto request) {
 
-        Account account = accountRepository.findByEmail(request.getEmail())
+        Account account = accountRepository.findByEmailAndDeletedAtIsNull(request.getEmail())
                 .orElseThrow(()->new BusinessException(ErrorCode.LOGIN_FAILED));
 
         if (!passwordEncoder.matches(request.getPassword(), account.getPassword())) {

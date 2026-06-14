@@ -42,7 +42,7 @@ public class DataInitializer implements ApplicationRunner {
     }
 
     private void initAdmin() {
-        if (accountRepository.findByEmail("admin@classq.com").isPresent()) return;
+        if (accountRepository.findByEmailAndDeletedAtIsNull("admin@classq.com").isPresent()) return;
 
         accountRepository.save(Account.builder()
                 .email("admin@classq.com")
