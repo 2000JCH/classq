@@ -65,6 +65,7 @@ public class Course extends BaseEntity {
     @Column(name = "max_grade")
     private Integer maxGrade;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private CourseStatus courseStatus = CourseStatus.ACTIVE;

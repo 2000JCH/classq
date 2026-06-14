@@ -20,8 +20,9 @@ public class CourseDetailDto {
     private ClassMode classMode;    // 온라인/오프라인
     private int credits;    // 학점
     private int capacity;   // 수강 정원
-    private int waitlistLimit;  //대기자
+    private int remainingCapacity;
+    private int waitlistLimit;  // 대기자
     private Integer minGrade;   // 수강 가능 최소 학년
     private Integer maxGrade;   // 수강 가능 최대 학년
-    private CourseStatus courseStatus;
+    private CourseStatus status;
 }

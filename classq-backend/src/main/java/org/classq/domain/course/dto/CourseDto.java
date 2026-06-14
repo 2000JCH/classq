@@ -12,16 +12,16 @@ import org.classq.domain.course.entity.enums.CourseType;
 public class CourseDto {
 
     private Long id;
-    private String name;    //강의명
+    private String name;
     private String professorName;
     private String departmentName;
     private CourseType courseType;  // 전필/전선/교양
     private ClassType classType;    // 이론/실습
     private ClassMode classMode;    // 온라인/오프라인
-    private int credit; // 학점
+    private int credits;    // 학점
     private int capacity;   // 수강 정원
+    private int remainingCapacity;
     private Integer minGrade;   // 수강 가능 최소 학년
     private Integer maxGrade;   // 수강 가능 최대 학년
-    private CourseStatus courseStatus;  // ACTIVE / CLOSED
-
+    private CourseStatus status;  // ACTIVE / CLOSED
 }
