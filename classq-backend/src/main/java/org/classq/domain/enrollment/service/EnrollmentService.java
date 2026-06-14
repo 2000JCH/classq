@@ -58,7 +58,13 @@ public class EnrollmentService {
 
         Long studentId = student.getId();
 
-        // 1. 대기자 처리 중 여부
+        // 1. 중복 수강신청 체크
+        if (enrollmentRepository.existsByStudent_IdAndCourse_IdAndEnrollmentStatusAndDeletedAtIsNull(
+                studentId, courseId, EnrollmentStatus.COMPLETED)) {
+            throw new BusinessException(ErrorCode.DUPLICATE_ENROLLMENT);
+        }
+
+        // 2. 대기자 처리 중 여부
         if (Boolean.TRUE.equals(redisTemplate.hasKey("lock:course:" + courseId))) {
             throw new BusinessException(ErrorCode.ENROLLMENT_LOCKED);
         }
@@ -71,11 +77,11 @@ public class EnrollmentService {
             throw new BusinessException(ErrorCode.ENROLLMENT_LOCKED);
         }
 
-        // 2. 시간표 중복 체크
+        // 3. 시간표 중복 체크
         List<CourseSchedule> newSchedules = courseScheduleRepository.findByCourseId(courseId);
         checkScheduleConflict(studentId, newSchedules);
 
-        // 3. 19학점 초과 체크
+        // 4. 19학점 초과 체크
         String creditsKey = "credits:student:" + studentId;
         String creditsCached = redisTemplate.opsForValue().get(creditsKey);
         if (creditsCached == null) {
@@ -88,14 +94,14 @@ public class EnrollmentService {
             throw new BusinessException(ErrorCode.CREDIT_EXCEEDED);
         }
 
-        // 4. 정원 차감 (음수면 롤백)
+        // 5. 정원 차감 (음수면 롤백)
         Long remaining = redisTemplate.opsForValue().decrement("enrollment:course:" + courseId);
         if (remaining == null || remaining < 0) {
             redisTemplate.opsForValue().increment("enrollment:course:" + courseId);
             throw new BusinessException(ErrorCode.ENROLLMENT_CLOSED);
         }
 
-        // 5. Kafka 발행
+        // 6. Kafka 발행
         List<EnrollmentEvent.ScheduleEntry> scheduleEntries = newSchedules.stream()
                 .map(s -> new EnrollmentEvent.ScheduleEntry(
                         s.getCourseScheduleDay().name(),
