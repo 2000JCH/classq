@@ -61,12 +61,16 @@ public class EnrollmentConsumer {
         Student student = studentRepository.getReferenceById(event.getStudentId());
         Course course = courseRepository.getReferenceById(event.getCourseId());
 
-        enrollmentRepository.save(
-                Enrollment.builder()
-                        .student(student)
-                        .course(course)
-                        .build()
-        );
+        // 취소 후 재수강신청 시 CANCELLED 행이 남아있어 INSERT 시 unique constraint 위반
+        // 기존 행이 있으면 COMPLETED로 재활성화, 없으면 새로 INSERT
+        enrollmentRepository
+                .findByStudent_IdAndCourse_IdAndDeletedAtIsNull(event.getStudentId(), event.getCourseId())
+                .ifPresentOrElse(
+                        Enrollment::reactivate,
+                        () -> enrollmentRepository.save(
+                                Enrollment.builder().student(student).course(course).build()
+                        )
+                );
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override

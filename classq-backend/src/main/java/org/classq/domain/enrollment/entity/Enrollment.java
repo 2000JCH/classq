@@ -36,5 +36,9 @@ public class Enrollment extends BaseEntity {
     public void cancel() {
         this.enrollmentStatus = EnrollmentStatus.CANCELLED;
     }
+
+    public void reactivate() {
+        this.enrollmentStatus = EnrollmentStatus.COMPLETED;
+    }
 }
 
