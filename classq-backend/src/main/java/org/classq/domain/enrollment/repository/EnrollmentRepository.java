@@ -22,6 +22,9 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
     boolean existsByStudent_IdAndCourse_IdAndEnrollmentStatusAndDeletedAtIsNull(
             Long studentId, Long courseId, EnrollmentStatus status);
 
+    // 재수강신청 시 기존 CANCELLED 행 조회
+    Optional<Enrollment> findByStudent_IdAndCourse_IdAndDeletedAtIsNull(Long studentId, Long courseId);
+
     Optional<Enrollment> findByIdAndStudent_IdAndEnrollmentStatusAndDeletedAtIsNull(
             Long id, Long studentId, EnrollmentStatus status);
 
@@ -47,7 +50,7 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
     // -------------------------------------------
 
     @Query("SELECT new org.classq.domain.enrollment.dto.EnrollmentResponseDto(" +
-            "e.id, e.course.id, e.course.name, e.course.credits, e.course.professor.name, e.enrollmentStatus) " +
+            "e.id, e.course.id, e.course.name, e.course.credits, e.course.professor.name, e.enrollmentStatus, e.course.courseType) " +
             "FROM Enrollment e " +
             "WHERE e.student.id = :studentId AND e.deletedAt IS NULL")
     List<EnrollmentResponseDto> findMyEnrollments(@Param("studentId") Long studentId);
