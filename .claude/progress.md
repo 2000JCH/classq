@@ -70,8 +70,8 @@
 - [x] Debezium CDC 설정 — course 테이블 변경 감지 → `course-events` 발행
   - `docker/debezium-connector.json` 작성 (snapshot.mode=schema_only, RegexRouter로 course-events 매핑)
 - [x] Course Consumer 구현 (`domain/course/consumer/CourseEventConsumer.java`)
-  - 정원 변경 시: RDS COUNT → 잔여 자리 재계산 후 Redis SET (대기자 알림은 Phase 8)
-  - 폐강 시: 잠금 해제 + Redis key 삭제 (수강/대기 학생 알림은 Phase 8)
+  - 정원 변경 시: RDS COUNT → 잔여 자리 재계산 후 Redis SET
+  - 폐강 시: 수강 중인 학생 enrollment soft-delete + Redis 학점/시간표 차감 + 대기 학생 soft-delete + 폐강 알림 발송(SSE) + Redis key 전체 삭제
 
 ---
 
@@ -187,6 +187,46 @@
 - [x] GET `/api/v1/admin/courses/{courseId}/waitlists` — 대기자 명단 조회
 - [x] GET `/api/v1/admin/stats/enrollments` — 수강신청 현황 통계
 
+### 버그 수정 (2026-06-14 테스트 중 발견)
+- [x] 수강신청 목록 미조회 + 시간표 중복 체크 미동작 — `Enrollment.enrollmentStatus` `@Builder.Default` 누락으로 Kafka Consumer가 DB 저장에 계속 실패, 연쇄적으로 시간표 캐시 미적재
+- [x] 수강취소 후 재수강신청 실패 — 취소 시 CANCELLED 행이 DB에 남아 재신청 시 Consumer INSERT → unique constraint 위반. upsert 패턴으로 해결 (CANCELLED 행 재활성화)
+- [x] 교수 회원가입 시 `professor` 테이블 레코드 미생성 버그
+  - `SignupRequestDto`에 `name`, `departmentId`, `grade` 필드 추가
+  - `AccountService.signup()`에서 role에 따라 `Student`/`Professor` 엔티티 생성
+  - 프론트 회원가입 폼에 이름/학과/학년 입력 필드 추가
+
+### 버그 수정 (2026-06-15 테스트 중 발견)
+- [x] 대기자 취소/만료/수락 후 rank 미갱신 및 대기석 미복구
+  - **문제**: 대기자가 이탈할 때 뒤 순번 rank를 -1씩 내리지 않아 rank가 불연속적으로 남음. 수락·만료 시 `waitlist:course:{id}` INCR 누락으로 대기 슬롯이 복구되지 않아 실제보다 잔여 대기 자리가 적게 표시됨
+  - **해결**: cancel / expireAndPromoteNext / accept에 `decrementRanksAfter` 추가, 수락·만료 완료 시 `INCR waitlist:course:{id}` 추가
+- [x] 대기 취소 후 재등록 시 unique constraint 충돌
+  - **문제**: soft-delete 후 재등록 시 `(student_id, course_id)` unique constraint가 삭제된 행도 포함하여 409 충돌 발생
+  - **해결**: `findByStudent_IdAndCourse_IdAndDeletedAtIsNotNull`으로 soft-delete 이력 조회 후 `reactivate()` — enrollment upsert 패턴과 동일한 방식 적용
+
+### 버그 수정 (2026-06-15 coderabbit 리뷰)
+- [x] 탈퇴 계정 access token 재발급 차단
+  - **문제**: `refresh()`가 `findById`를 사용해 soft-delete된 계정에도 새 access token을 발급
+  - **해결**: `findByIdAndDeletedAtIsNull`로 변경해 탈퇴 계정은 토큰 재발급 거절
+- [x] Kafka 중복 소비 시 Redis 학점 중복 증가 방지 (EnrollmentConsumer 멱등성 보완)
+  - **문제**: Kafka at-least-once 보장으로 동일 메시지가 재전달될 때, enrollment가 이미 COMPLETED면 DB 변화 없이 `credits:student:{id}` 만 INCRBY → 학점 누적 오염
+  - **해결**: enrollment 상태 변화(신규 INSERT 또는 CANCELLED→COMPLETED 전환)가 실제로 발생한 경우에만 Redis 동기화 수행
+- [x] 정원 수정 후 트랜잭션 롤백 시 Redis-DB 불일치 방지 (CourseService)
+  - **문제**: DB 트랜잭션 내부에서 Redis get→연산→set을 직접 수행해, 이후 예외로 롤백되면 DB는 복구되지만 Redis 잔여석은 이미 변경된 상태로 남음
+  - **해결**: Redis 반영을 `afterCommit`으로 이동해 DB 커밋 성공 후에만 Redis 갱신
+
+### 추가 구현 (2026-06-14)
+- [x] 내 수강신청 목록 전공/교양 학점 분류 표시 (전공: N학점 · 교양: N학점 · 총 신청학점: N학점)
+- [x] 강의 목록 대기석 잔여 현황 표시 (`remainingWaitlist` / `waitlistLimit`)
+- [x] 교수 강의 정원·대기 정원 수정 시 Redis 자동 반영 + 정원 증가 시 대기 1번 학생 SSE 알림
+- [x] 교수 회원가입 승인 기능
+  - `AccountStatus` enum 추가 (`PENDING` / `ACTIVE`)
+  - 교수 회원가입 시 `PENDING`, 학생은 `ACTIVE`로 저장
+  - `PENDING` 상태 교수 로그인 거절 (에러코드 `ACCOUNT_PENDING`)
+  - `GET /api/v1/admin/accounts/pending` — 승인 대기 교수 목록 조회
+  - `PATCH /api/v1/admin/accounts/{accountId}/approve` — 교수 승인 API
+  - 관리자 교수 승인 페이지 추가 (`/admin/professors`)
+  - 로 그인 시 `ACCOUNT_PENDING` 에러 → "관리자 승인 대기 중입니다." 메시지
+
 ---
 
 ## Phase 10. 모니터링
@@ -205,7 +245,47 @@
 
 ---
 
-## Phase 11. AWS 배포
+## Phase 11. 로컬 통합 검증 및 부하 테스트
+
+- [x] Docker Compose 전체 서비스 로컬 실행 검증
+  - MySQL, Redis (AOF), Kafka, Debezium, 앱 서버 컨테이너 동시 기동
+  - Debezium 커넥터 등록 및 CDC 동작 확인
+  - 수강신청 → Kafka → RDS 비동기 처리 흐름 end-to-end 확인
+- [x] build.gradle Gatling 플러그인 추가
+- [x] Gatling 부하 테스트 시나리오 작성 (수강신청 폭주 시나리오)
+- [x] 로컬 환경에서 Gatling 부하 테스트 실행
+- [ ] Grafana로 병목 구간 확인 및 개선
+
+### 포트폴리오용 측정 항목 (개선 전 / 후 기록)
+
+> 상세 수치는 `.claude/docs/load-test-results.md` 참고
+> 튜닝 완료 후 개선 후 수치 추가 예정
+
+| 항목 | 개선 전 | 개선 후 |
+|---|---|---|
+| 동시 요청 수 (VU) | 300명 | |
+| 평균 응답시간 (ms) | 2424ms | |
+| P95 응답시간 (ms) | 4079ms | |
+| P99 응답시간 (ms) | 4354ms | |
+| 처리량 (req/s) | 100 req/s | |
+| 에러율 (%) | 0% | |
+| RDS CPU 사용률 (%) | - | |
+
+**개선 포인트 후보** (튜닝하면서 채워나가기)
+- Redis-only 동기 구간 → RDS 부하 감소율
+- Kafka 비동기 처리 → 응답시간 단축
+- HikariCP 커넥션 풀 튜닝 → 처리량 변화
+- 인덱스 추가 → 슬로우 쿼리 개선
+
+---
+
+## Phase 12. AWS 배포
+
+### 배포 전 필수 수정 항목
+- [ ] `DataInitializer` 관리자 비밀번호 하드코딩 제거 → 환경변수(`ADMIN_PASSWORD`)로 변경
+- [ ] `application.yml` `jpa.hibernate.ddl-auto=create` → `validate` 또는 `none`으로 변경
+- [ ] `SecurityConfig` CORS 허용 출처 `localhost:5173` → 실제 배포 도메인으로 변경
+- [ ] `DataInitializer` 학과 초기 데이터 삽입 → SQL 마이그레이션(Flyway 등)으로 분리 검토
 
 - [ ] EKS + ECR — 앱 컨테이너 배포
 - [ ] RDS (MySQL) 연결
@@ -218,14 +298,7 @@
   - ElastiCache 메모리 / 커넥션 메트릭
   - MSK 사용 시 Kafka Consumer lag
   - Grafana에 CloudWatch 데이터 소스 추가
-
----
-
-## Phase 12. 부하 테스트
-
-- [ ] NGrinder 로컬 빌드 (네이버 부하 테스트 툴)
-- [ ] 수강신청 폭주 시나리오 부하 테스트 실행
-- [ ] Grafana로 병목 구간 확인 및 개선
+- [ ] AWS 환경에서 동일한 Gatling 시나리오 재실행 및 결과 비교
 
 ---
 
@@ -235,7 +308,7 @@
 Phase 1 (기반) → Phase 2 (인증) → Phase 3 (사용자) → Phase 4 (강의)
 → Phase 5 (Kafka/Debezium) → Phase 6 (수강신청) → Phase 7 (대기자)
 → Phase 8 (알림) → Phase 9 (관리자) → Phase 10 (모니터링)
-→ Phase 11 (AWS 배포) → Phase 12 (부하 테스트)
+→ Phase 11 (로컬 통합 검증 및 부하 테스트) → Phase 12 (AWS 배포)
 ```
 
 > Phase 6이 핵심이며 Phase 5 완료 후 진행해야 한다.
