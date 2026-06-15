@@ -192,15 +192,17 @@ export default function CoursesPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className={`text-xs px-2 py-1 rounded-full ${
-                            course.status === 'ACTIVE'
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-red-100 text-red-700'
-                          }`}
-                        >
-                          {course.status === 'ACTIVE' ? '신청 가능' : '마감'}
-                        </span>
+                        {(() => {
+                          const label =
+                            course.status !== 'ACTIVE' ? '마감' :
+                            course.remainingCapacity > 0 ? '신청 가능' :
+                            course.waitlistLimit > 0 && course.remainingWaitlist > 0 ? '대기 가능' : '마감'
+                          const color =
+                            label === '신청 가능' ? 'bg-green-100 text-green-700' :
+                            label === '대기 가능' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-red-100 text-red-700'
+                          return <span className={`text-xs px-2 py-1 rounded-full ${color}`}>{label}</span>
+                        })()}
                       </td>
                     </tr>
                   ))

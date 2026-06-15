@@ -22,6 +22,7 @@ public class CourseDetailDto {
     private int capacity;   // 수강 정원
     private int remainingCapacity;
     private int waitlistLimit;  // 대기자
+    private int remainingWaitlist;  // 잔여 대기석
     private Integer minGrade;   // 수강 가능 최소 학년
     private Integer maxGrade;   // 수강 가능 최대 학년
     private CourseStatus status;

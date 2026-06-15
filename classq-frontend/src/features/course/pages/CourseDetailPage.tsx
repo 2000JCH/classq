@@ -41,7 +41,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   DUPLICATE_ENROLLMENT: '이미 신청한 강의입니다.',
   CREDIT_EXCEEDED: '학점이 초과되었습니다.',
   TIME_CONFLICT: '시간표가 중복됩니다.',
-  ENROLLMENT_LOCKED: '대기자 처리 중입니다. 잠시 후 다시 시도하세요.',
+  ENROLLMENT_LOCKED: '대기자 처리 중입니다. 아래 대기자 등록 버튼을 이용해주세요.',
 }
 
 function getErrorMessage(err: unknown): string {
@@ -58,6 +58,7 @@ export default function CourseDetailPage() {
   const [error, setError] = useState(false)
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [enrollmentLocked, setEnrollmentLocked] = useState(false)
 
   useEffect(() => {
     if (!courseId) return
@@ -94,6 +95,8 @@ export default function CourseDetailPage() {
         setCourse(updated)
       }
     } catch (err) {
+      const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
+      if (code === 'ENROLLMENT_LOCKED') setEnrollmentLocked(true)
       setActionMessage({ type: 'error', text: getErrorMessage(err) })
     } finally {
       setIsSubmitting(false)
@@ -143,7 +146,7 @@ export default function CourseDetailPage() {
   const showWaitlistButton =
     role === 'STUDENT' &&
     course.status === 'ACTIVE' &&
-    course.remainingCapacity === 0 &&
+    (course.remainingCapacity === 0 || enrollmentLocked) &&
     course.waitlistLimit > 0
 
   return (
@@ -155,13 +158,17 @@ export default function CourseDetailPage() {
       <div className="flex items-start justify-between mb-6">
         <h1 className="text-2xl font-bold">{course.name}</h1>
         <div className="flex items-center gap-2">
-          <span
-            className={`text-sm px-3 py-1 rounded-full ${
-              course.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-            }`}
-          >
-            {course.status === 'ACTIVE' ? '신청 가능' : '마감'}
-          </span>
+          {(() => {
+            const label =
+              course.status !== 'ACTIVE' ? '마감' :
+              course.remainingCapacity > 0 ? '신청 가능' :
+              course.waitlistLimit > 0 && course.remainingWaitlist > 0 ? '대기 가능' : '마감'
+            const color =
+              label === '신청 가능' ? 'bg-green-100 text-green-700' :
+              label === '대기 가능' ? 'bg-yellow-100 text-yellow-700' :
+              'bg-red-100 text-red-700'
+            return <span className={`text-sm px-3 py-1 rounded-full ${color}`}>{label}</span>
+          })()}
           {role === 'PROFESSOR' && (
             <Link
               to={`/professor/courses/${courseId}/edit`}
