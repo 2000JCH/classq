@@ -69,6 +69,7 @@ export default function CourseDetailPage() {
     setError(false)
     setLoading(true)
     setActionMessage(null)
+    setEnrollmentLocked(false)
 
     Promise.all([getCourse(id), getCourseSchedules(id)])
       .then(([courseData, schedulesData]) => {
@@ -112,6 +113,7 @@ export default function CourseDetailPage() {
       setActionMessage({ type: 'success', text: '대기자 등록이 완료되었습니다.' })
       const updated = await getCourse(course.id)
       setCourse(updated)
+      setEnrollmentLocked(false)
     } catch (err) {
       setActionMessage({ type: 'error', text: getErrorMessage(err) })
     } finally {
@@ -147,7 +149,8 @@ export default function CourseDetailPage() {
     role === 'STUDENT' &&
     course.status === 'ACTIVE' &&
     (course.remainingCapacity === 0 || enrollmentLocked) &&
-    course.waitlistLimit > 0
+    course.waitlistLimit > 0 &&
+    course.remainingWaitlist > 0
 
   return (
     <div className="max-w-3xl mx-auto p-6">

@@ -108,18 +108,26 @@ public class DataInitializer implements ApplicationRunner {
     }
 
     private void initTestProfessor() {
-        if (accountRepository.existsByEmail("aaa123@naver.com")) return;
+        Account account = accountRepository.findByEmailAndDeletedAtIsNull("aaa123@naver.com")
+                .orElse(null);
+
+        if (account != null &&
+                professorRepository.findByAccountIdAndDeletedAtIsNull(account.getId()).isPresent()) {
+            return;
+        }
 
         Department csDept = departmentRepository.findAll().stream()
                 .filter(d -> d.getName().equals("컴퓨터공학과"))
                 .findFirst().orElseThrow();
 
-        Account account = accountRepository.save(Account.builder()
-                .email("aaa123@naver.com")
-                .password(passwordEncoder.encode("aaa12345!"))
-                .role(Role.PROFESSOR)
-                .status(AccountStatus.ACTIVE)
-                .build());
+        if (account == null) {
+            account = accountRepository.save(Account.builder()
+                    .email("aaa123@naver.com")
+                    .password(passwordEncoder.encode("aaa12345!"))
+                    .role(Role.PROFESSOR)
+                    .status(AccountStatus.ACTIVE)
+                    .build());
+        }
 
         professorRepository.save(Professor.builder()
                 .account(account)
@@ -129,7 +137,10 @@ public class DataInitializer implements ApplicationRunner {
     }
 
     private void initTestCourses() {
-        if (courseRepository.count() > 0) return;
+        if (courseRepository.count() > 0) {
+            initCourseRedisKeysIfMissing();
+            return;
+        }
 
         Department csDept = departmentRepository.findAll().stream()
                 .filter(d -> d.getName().equals("컴퓨터공학과"))
@@ -147,6 +158,19 @@ public class DataInitializer implements ApplicationRunner {
         saveCourse(professor, null,    "음악의이해",  CourseType.LIBERAL_ARTS,   ClassType.THEORY,  ClassMode.OFFLINE, 3, 30, 30, 1, 4, CourseScheduleDay.TUE, LocalTime.of(16, 57), LocalTime.of(19, 57));
         saveCourse(professor, null,    "교양이란",    CourseType.LIBERAL_ARTS,   ClassType.THEORY,  ClassMode.ONLINE,  3, 30, 30, 1, 4, CourseScheduleDay.TUE, LocalTime.of(17, 59), LocalTime.of(18, 59));
         saveCourse(professor, null,    "경찰과도둑",  CourseType.LIBERAL_ARTS,   ClassType.PRACTICE,ClassMode.OFFLINE, 3, 30, 30, 1, 4, CourseScheduleDay.WED, LocalTime.of(13, 58), LocalTime.of(14, 58));
+    }
+
+    private void initCourseRedisKeysIfMissing() {
+        courseRepository.findAll().forEach(course -> {
+            String enrollmentKey = "enrollment:course:" + course.getId();
+            String waitlistKey = "waitlist:course:" + course.getId();
+            if (!Boolean.TRUE.equals(redisTemplate.hasKey(enrollmentKey))) {
+                redisTemplate.opsForValue().set(enrollmentKey, String.valueOf(course.getCapacity()));
+            }
+            if (!Boolean.TRUE.equals(redisTemplate.hasKey(waitlistKey))) {
+                redisTemplate.opsForValue().set(waitlistKey, String.valueOf(course.getWaitlistLimit()));
+            }
+        });
     }
 
     private void saveCourse(Professor professor, Department department, String name,
