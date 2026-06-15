@@ -2,6 +2,7 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.5.2'
 	id 'io.spring.dependency-management' version '1.1.6'
+	id 'io.gatling.gradle' version '3.11.5'
 }
 
 group = 'org.classq'
@@ -43,4 +44,14 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+// 부하 테스트 실행 전 DB/Redis 초기화에 필요한 의존성
+configurations {
+	gatlingImplementation
+}
+
+dependencies {
+	gatlingImplementation 'com.mysql:mysql-connector-j:8.4.0'
+	gatlingImplementation 'redis.clients:jedis:5.2.0'
 }
