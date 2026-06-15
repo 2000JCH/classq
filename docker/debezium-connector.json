@@ -16,6 +16,7 @@
     "transforms": "route",
     "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
     "transforms.route.regex": "classq\\.classq\\.course",
-    "transforms.route.replacement": "course-events"
+    "transforms.route.replacement": "course-events",
+    "heartbeat.interval.ms": "0"
   }
 }
