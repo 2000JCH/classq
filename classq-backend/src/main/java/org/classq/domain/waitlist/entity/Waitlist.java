@@ -34,9 +34,10 @@ public class Waitlist extends BaseEntity {
     private int rank;
 
     //대기 상태
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private WaitlistStatus waitlistStatus =  WaitlistStatus.WAITING;
+    private WaitlistStatus waitlistStatus = WaitlistStatus.WAITING;
 
     //수락 만료 시간 10분 지나면 Scheduler -> EXPIRED 처리
     @Column(name = "expired_at")

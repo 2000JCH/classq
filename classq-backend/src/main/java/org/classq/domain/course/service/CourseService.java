@@ -15,16 +15,29 @@ import org.classq.domain.course.repository.CourseRepository;
 import org.classq.domain.course.repository.CourseScheduleRepository;
 import org.classq.domain.department.entity.Department;
 import org.classq.domain.department.repository.DepartmentRepository;
+import org.classq.domain.notification.entity.Notification;
+import org.classq.domain.notification.entity.NotificationType;
+import org.classq.domain.notification.repository.NotificationRepository;
+import org.classq.domain.notification.service.SseEmitterService;
 import org.classq.domain.professor.entity.Professor;
 import org.classq.domain.professor.repository.ProfessorRepository;
+import org.classq.domain.waitlist.entity.Waitlist;
+import org.classq.domain.waitlist.entity.WaitlistStatus;
+import org.classq.domain.waitlist.repository.WaitlistRepository;
 import org.classq.global.exception.BusinessException;
 import org.classq.global.exception.ErrorCode;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +47,9 @@ public class CourseService {
     private final CourseScheduleRepository courseScheduleRepository;
     private final ProfessorRepository professorRepository;
     private final DepartmentRepository departmentRepository;
+    private final WaitlistRepository waitlistRepository;
+    private final NotificationRepository notificationRepository;
+    private final SseEmitterService sseEmitterService;
     private final RedisTemplate<String, String> redisTemplate;
 
     // 강의 목록 조회
@@ -140,7 +156,73 @@ public class CourseService {
                     .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
         }
 
+        int oldCapacity = course.getCapacity();
+        int oldWaitlistLimit = course.getWaitlistLimit();
+
         course.update(request.getName(), request.getClassMode(), department, request.getCapacity(), request.getWaitlistLimit(), request.getMinGrade(), request.getMaxGrade());
+
+        // 정원/대기 정원 변경 시 Redis 잔여석 조정 — DB 커밋 후 반영해 롤백 시 불일치 방지
+        int capacityDiff = request.getCapacity() - oldCapacity;
+        int waitlistDiff = request.getWaitlistLimit() - oldWaitlistLimit;
+        String enrollmentKey = "enrollment:course:" + courseId;
+        String waitlistKey = "waitlist:course:" + courseId;
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                String enrollmentVal = redisTemplate.opsForValue().get(enrollmentKey);
+                if (enrollmentVal != null) {
+                    try {
+                        int newRemaining = Math.max(0, Integer.parseInt(enrollmentVal) + capacityDiff);
+                        redisTemplate.opsForValue().set(enrollmentKey, String.valueOf(newRemaining));
+                    } catch (NumberFormatException ignored) {}
+                }
+
+                String waitlistVal = redisTemplate.opsForValue().get(waitlistKey);
+                if (waitlistVal != null) {
+                    try {
+                        int newRemaining = Math.max(0, Integer.parseInt(waitlistVal) + waitlistDiff);
+                        redisTemplate.opsForValue().set(waitlistKey, String.valueOf(newRemaining));
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+        });
+
+        // 교수가 정원 증가 시 대기자 알림
+        if (request.getCapacity() > oldCapacity) {
+            boolean alreadyNotified = waitlistRepository
+                    .findFirstByCourse_IdAndWaitlistStatusAndDeletedAtIsNullOrderByRankAsc(courseId, WaitlistStatus.NOTIFIED)
+                    .isPresent();
+
+            if (!alreadyNotified) {
+                List<Waitlist> waiting = waitlistRepository
+                        .findTopWaitingByCourseIdForUpdate(courseId, WaitlistStatus.WAITING, PageRequest.of(0, 1));
+
+                if (!waiting.isEmpty()) {
+                    Waitlist waitlist = waiting.get(0);
+                    waitlist.notified();
+
+                    Notification notification = notificationRepository.save(
+                            Notification.builder()
+                                    .student(waitlist.getStudent())
+                                    .course(waitlist.getCourse())
+                                    .notificationType(NotificationType.WAITLIST_AVAILABLE)
+                                    .message("수강 신청 자리가 생겼습니다. 10분 내에 수락해 주세요.")
+                                    .build()
+                    );
+
+                    Long studentId = waitlist.getStudent().getId();
+
+                    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            redisTemplate.opsForValue().set("lock:course:" + courseId, "1", 15, TimeUnit.MINUTES);
+                            sseEmitterService.send(studentId, notification);
+                        }
+                    });
+                }
+            }
+        }
     }
 
     // 강의 폐강
@@ -172,10 +254,24 @@ public class CourseService {
                 course.getCredits(),
                 course.getCapacity(),
                 getRemainingCapacity(course),
+                course.getWaitlistLimit(),
+                getWaitlistRemaining(course),
                 course.getMinGrade(),
                 course.getMaxGrade(),
                 course.getCourseStatus()
         );
+    }
+
+    private int getWaitlistRemaining(Course course) {
+        String value = redisTemplate.opsForValue().get("waitlist:course:" + course.getId());
+        if (value != null) {
+            try {
+                return Math.max(0, Integer.parseInt(value));
+            } catch (NumberFormatException e) {
+                return course.getWaitlistLimit();
+            }
+        }
+        return course.getWaitlistLimit();
     }
 
     private int getRemainingCapacity(Course course) {

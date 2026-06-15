@@ -13,12 +13,16 @@ export interface WaitlistRequest {
   courseId: number
 }
 
+export type CourseType = 'MAJOR_REQUIRED' | 'MAJOR_ELECTIVE' | 'LIBERAL_ARTS'
+
 export interface EnrollmentItem {
   enrollmentId: number
   courseId: number
   courseName: string
   credits: number
+  professorName: string
   status: 'COMPLETED' | 'CANCELLED'
+  courseType: CourseType
 }
 
 export type WaitlistStatus = 'WAITING' | 'NOTIFIED' | 'EXPIRED' | 'COMPLETED'

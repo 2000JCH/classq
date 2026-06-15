@@ -28,12 +28,12 @@ export async function forceCloseCourse(courseId: number): Promise<void> {
 
 export async function getAdminCourseEnrollments(courseId: number): Promise<AdminEnrollmentItem[]> {
   const { data } = await api.get(`/admin/courses/${courseId}/enrollments`)
-  return data
+  return data.content ?? data
 }
 
 export async function getAdminCourseWaitlists(courseId: number): Promise<AdminWaitlistItem[]> {
   const { data } = await api.get(`/admin/courses/${courseId}/waitlists`)
-  return data
+  return data.content ?? data
 }
 
 export async function getEnrollmentStats(): Promise<EnrollmentStats> {
