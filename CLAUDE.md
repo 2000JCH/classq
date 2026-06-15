@@ -19,9 +19,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # 클린 빌드
 ./gradlew clean build
+
+# 부하 테스트 (Docker + 백엔드 서버 실행 후 실행)
+./gradlew gatlingRun
 ```
 
 모든 명령어는 `classq-backend/` 디렉토리에서 실행한다.
+
+> **Gradle 버전**: `8.11.1` — Gatling 플러그인(`io.gatling.gradle:3.11.5`)이 Gradle 9와 호환되지 않아 다운그레이드. `gradle/wrapper/gradle-wrapper.properties` 참고.
 
 ## 아키텍처
 
@@ -139,7 +144,7 @@ Consumer 그룹: `enrollment-processor` / Producer: `acks=all` / Consumer: `enab
 
 `application.yml`에서 `${VAR:기본값}` 형식으로 환경변수를 읽는다. 운영 환경에서는 `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `REDIS_HOST`, `REDIS_PORT`, `KAFKA_BOOTSTRAP_SERVERS`, `JWT_SECRET`을 설정해야 한다.
 
-`jpa.hibernate.ddl-auto`는 로컬 개발 중 `create`, 운영에서는 `validate` 또는 `none`으로 변경한다.
+`jpa.hibernate.ddl-auto`는 현재 `update`로 설정되어 있다. 운영 배포 시 `validate` 또는 `none`으로 변경해야 한다 (Phase 12 배포 전 필수 수정 항목).
 
 ## 구현 진행 상황
 
@@ -155,6 +160,9 @@ Consumer 그룹: `enrollment-processor` / Producer: `acks=all` / Consumer: `enab
 | `db-design.md` | 9개 테이블 DDL 전문, 각 테이블 설계 의도, 테이블 관계도, soft delete 적용 여부 기준 |
 | `api-design.md` | 모든 엔드포인트 목록, 요청/응답 JSON 예시, 필터 파라미터, 에러 코드 전체 목록 |
 | `redis-design.md` | Redis 키별 초기화/갱신/삭제 시점, AOF 설정 이유, 장애 복구 방법 |
+| `frontend-design.md` | 프론트엔드 스택, CORS 설정, 토큰 관리 전략, SSE 연결 방식, axios interceptor |
+| `test-data.md` | 로컬 테스트용 학생/교수/강의 계정 정보, Gatling 부하 테스트 계정 패턴 |
+| `load-test-results.md` | Gatling 부하 테스트 결과 (100명/300명 baseline, 개선 후 수치 예정) |
 
 ## 협업 방식
 

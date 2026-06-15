@@ -21,4 +21,11 @@ public abstract class BaseEntity {
     @Column
     private LocalDateTime deletedAt;
 
+    public void delete() {
+        this.deletedAt = LocalDateTime.now();
+    }
+
+    public void restore() {
+        this.deletedAt = null;
+    }
 }

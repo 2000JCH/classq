@@ -27,7 +27,7 @@ spring:
     producer:
       acks: all
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
     consumer:
       group-id: enrollment-processor
       auto-offset-reset: earliest
@@ -36,6 +36,18 @@ spring:
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
 jwt:
-  secret: ${JWT_SECRET:local-dev-secret-key-must-be-at-least-256-bits-long!!}
-  access-token-expiration: 1800000    #30분
-  refresh-token-expiration: 604800000   #7일
+  secret: ${JWT_SECRET:local-dev-secret-key-for-classq-do-not-use-in-production}
+  access-token-expiration: ${JWT_ACCESS_EXPIRATION:1800000}
+  refresh-token-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true

@@ -1,0 +1,22 @@
+{
+  "name": "classq-course-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "database.hostname": "mysql",
+    "database.port": "3306",
+    "database.user": "root",
+    "database.password": "root1234",
+    "database.server.id": "184054",
+    "topic.prefix": "classq",
+    "database.include.list": "classq",
+    "table.include.list": "classq.course",
+    "snapshot.mode": "schema_only",
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:29092",
+    "schema.history.internal.kafka.topic": "schema-changes.classq",
+    "transforms": "route",
+    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.route.regex": "classq\\.classq\\.course",
+    "transforms.route.replacement": "course-events",
+    "heartbeat.interval.ms": "0"
+  }
+}

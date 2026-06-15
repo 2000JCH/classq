@@ -28,9 +28,17 @@ public class Enrollment extends BaseEntity {
     @JoinColumn(name = "course_id", nullable = false)
     private Course course;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private EnrollmentStatus enrollmentStatus = EnrollmentStatus.COMPLETED;
 
+    public void cancel() {
+        this.enrollmentStatus = EnrollmentStatus.CANCELLED;
+    }
+
+    public void reactivate() {
+        this.enrollmentStatus = EnrollmentStatus.COMPLETED;
+    }
 }
 

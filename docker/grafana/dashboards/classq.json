@@ -1,0 +1,58 @@
+{
+  "title": "ClassQ 모니터링",
+  "uid": "classq-monitoring",
+  "schemaVersion": 39,
+  "time": { "from": "now-30m", "to": "now" },
+  "refresh": "15s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "API 응답시간 P95 (초)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"classq\"}[1m])) by (le, uri, method))",
+          "legendFormat": "{{method}} {{uri}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Kafka Consumer Lag (enrollment-processor)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "expr": "kafka_consumer_fetch_manager_records_lag{application=\"classq\"}",
+          "legendFormat": "{{topic}} - partition {{partition}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      }
+    },
+    {
+      "id": 3,
+      "title": "HikariCP 커넥션",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "expr": "hikaricp_connections_active{application=\"classq\"}",
+          "legendFormat": "활성"
+        },
+        {
+          "expr": "hikaricp_connections_pending{application=\"classq\"}",
+          "legendFormat": "대기"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      }
+    }
+  ]
+}
