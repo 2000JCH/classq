@@ -22,6 +22,7 @@ export default function MyWaitlistsPage() {
   const [waitlists, setWaitlists] = useState<WaitlistItem[]>([])
   const [credits, setCredits] = useState({ current: 0, max: 0 })
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [submitting, setSubmitting] = useState<number | null>(null)
 
   async function load() {
@@ -29,6 +30,8 @@ export default function MyWaitlistsPage() {
       const res = await getMyWaitlists()
       setWaitlists(res.waitlists)
       setCredits({ current: res.currentCredits, max: res.maxCredits })
+    } catch {
+      setError(true)
     } finally {
       setLoading(false)
     }
@@ -75,6 +78,7 @@ export default function MyWaitlistsPage() {
   }
 
   if (loading) return <p className="text-center text-gray-500 py-20">로딩 중...</p>
+  if (error) return <p className="text-center text-red-500 py-20">목록을 불러오지 못했습니다.</p>
 
   return (
     <div className="max-w-3xl mx-auto p-6">
