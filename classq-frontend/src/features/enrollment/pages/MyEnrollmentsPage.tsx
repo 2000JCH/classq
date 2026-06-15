@@ -14,6 +14,8 @@ export default function MyEnrollmentsPage() {
     try {
       const data = await getMyEnrollments()
       setEnrollments(data.filter((e) => e.status === 'COMPLETED'))
+    } catch {
+      setError(true)
     } finally {
       setLoading(false)
     }
