@@ -142,7 +142,7 @@ public class EnrollmentService {
         if (Boolean.TRUE.equals(redisTemplate.hasKey(enrollmentKey))) {
             redisTemplate.opsForValue().increment(enrollmentKey);
         } else {
-            int enrolled = enrollmentRepository.countByCourse_IdAndEnrollmentStatus(courseId, EnrollmentStatus.COMPLETED);
+            int enrolled = enrollmentRepository.countByCourse_IdAndEnrollmentStatusAndDeletedAtIsNull(courseId, EnrollmentStatus.COMPLETED);
             int remaining = enrollment.getCourse().getCapacity() - enrolled + 1;
             redisTemplate.opsForValue().set(enrollmentKey, String.valueOf(remaining));
         }

@@ -217,7 +217,7 @@ public class WaitlistService {
 
         Long courseId = managed.getCourse().getId();
         waitlistRepository.decrementRanksAfter(courseId, managed.getRank());
-        redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
+
         Optional<Waitlist> nextOpt = waitlistRepository
                 .findFirstByCourse_IdAndWaitlistStatusAndDeletedAtIsNullOrderByRankAsc(courseId, WaitlistStatus.WAITING);
 
@@ -237,11 +237,18 @@ public class WaitlistService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
+                    redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
                     sseEmitterService.send(studentId, notification);
                 }
             });
         } else {
-            redisTemplate.delete("lock:course:" + courseId);
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
+                    redisTemplate.delete("lock:course:" + courseId);
+                }
+            });
         }
     }
 
@@ -273,7 +280,12 @@ public class WaitlistService {
         waitlist.delete();
         waitlistRepository.decrementRanksAfter(courseId, cancelledRank);
 
-        // 6. Redis 대기 슬롯 반환 (DB 변경 후 수행 — 실패 시 트랜잭션 롤백으로 정합성 유지)
-        redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
+        // 6. Redis 대기 슬롯 반환 — DB 커밋 후 반영해 롤백 시 불일치 방지
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
+            }
+        });
     }
 }
