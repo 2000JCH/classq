@@ -47,6 +47,7 @@ public class WaitlistService {
     private final RedissonClient redissonClient;
 
     // 내 대기 목록 조회
+    @Transactional(readOnly = true)
     public WaitlistListResponseDto getMyWaitlists(Long accountId) {
         // 1. 학생 조회
         Student student = studentRepository.findByAccountIdAndDeletedAtIsNull(accountId)
@@ -78,6 +79,7 @@ public class WaitlistService {
     }
 
     // 대기자 등록
+    @Transactional
     public WaitlistResponseDto register(Long accountId, Long courseId) {
         Student student = studentRepository.findByAccountIdAndDeletedAtIsNull(accountId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
@@ -118,13 +120,17 @@ public class WaitlistService {
                 int rank = waitlistRepository.countByCourse_IdAndWaitlistStatusInAndDeletedAtIsNull(
                         courseId, List.of(WaitlistStatus.WAITING, WaitlistStatus.NOTIFIED)) + 1;
 
-                Waitlist waitlist = waitlistRepository.save(
-                        Waitlist.builder()
-                                .student(student)
-                                .course(course)
-                                .rank(rank)
-                                .build()
-                );
+                // 취소 후 재등록 시 soft-delete 이력 재활성화 (unique constraint 충돌 방지)
+                Waitlist waitlist = waitlistRepository
+                        .findByStudent_IdAndCourse_IdAndDeletedAtIsNotNull(studentId, courseId)
+                        .map(existing -> { existing.reactivate(rank); return waitlistRepository.save(existing); })
+                        .orElseGet(() -> waitlistRepository.save(
+                                Waitlist.builder()
+                                        .student(student)
+                                        .course(course)
+                                        .rank(rank)
+                                        .build()
+                        ));
                 return new WaitlistResponseDto(waitlist.getId(), courseId, course.getName(), rank, WaitlistStatus.WAITING);
             } catch (BusinessException e) {
                 redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
@@ -174,6 +180,7 @@ public class WaitlistService {
         try {
             enrollmentService.enrollFromWaitlist(studentId, courseId);
             waitlist.expire();
+            waitlistRepository.decrementRanksAfter(courseId, waitlist.getRank());
         } catch (BusinessException e) {
             expireAndPromoteNext(waitlist);
             throw e;
@@ -209,6 +216,8 @@ public class WaitlistService {
         managed.expire();
 
         Long courseId = managed.getCourse().getId();
+        waitlistRepository.decrementRanksAfter(courseId, managed.getRank());
+        redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
         Optional<Waitlist> nextOpt = waitlistRepository
                 .findFirstByCourse_IdAndWaitlistStatusAndDeletedAtIsNullOrderByRankAsc(courseId, WaitlistStatus.WAITING);
 
@@ -258,10 +267,13 @@ public class WaitlistService {
             throw new BusinessException(ErrorCode.WAITLIST_INVALID_STATUS);
         }
 
-        // 5. RDS soft delete
+        // 5. RDS soft delete + rank 갱신
+        int cancelledRank = waitlist.getRank();
+        Long courseId = waitlist.getCourse().getId();
         waitlist.delete();
+        waitlistRepository.decrementRanksAfter(courseId, cancelledRank);
 
         // 6. Redis 대기 슬롯 반환 (DB 변경 후 수행 — 실패 시 트랜잭션 롤백으로 정합성 유지)
-        redisTemplate.opsForValue().increment("waitlist:course:" + waitlist.getCourse().getId());
+        redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
     }
 }

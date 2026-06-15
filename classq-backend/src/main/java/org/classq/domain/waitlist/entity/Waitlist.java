@@ -51,4 +51,11 @@ public class Waitlist extends BaseEntity {
     public void expire() {
         this.waitlistStatus = WaitlistStatus.EXPIRED;
     }
+
+    public void reactivate(int newRank) {
+        restore();
+        this.waitlistStatus = WaitlistStatus.WAITING;
+        this.rank = newRank;
+        this.expiredAt = null;
+    }
 }
