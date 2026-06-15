@@ -238,6 +238,7 @@ public class EnrollmentService {
         }
 
         redisTemplate.delete("lock:course:" + courseId);
+        redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
     }
 
     // 시간표 체크
