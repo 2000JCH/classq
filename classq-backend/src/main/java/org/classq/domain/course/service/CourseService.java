@@ -161,25 +161,32 @@ public class CourseService {
 
         course.update(request.getName(), request.getClassMode(), department, request.getCapacity(), request.getWaitlistLimit(), request.getMinGrade(), request.getMaxGrade());
 
-        // 정원 변경 시 Redis 잔여석 조정
+        // 정원/대기 정원 변경 시 Redis 잔여석 조정 — DB 커밋 후 반영해 롤백 시 불일치 방지
+        int capacityDiff = request.getCapacity() - oldCapacity;
+        int waitlistDiff = request.getWaitlistLimit() - oldWaitlistLimit;
         String enrollmentKey = "enrollment:course:" + courseId;
-        String enrollmentVal = redisTemplate.opsForValue().get(enrollmentKey);
-        if (enrollmentVal != null) {
-            try {
-                int newRemaining = Math.max(0, Integer.parseInt(enrollmentVal) + (request.getCapacity() - oldCapacity));
-                redisTemplate.opsForValue().set(enrollmentKey, String.valueOf(newRemaining));
-            } catch (NumberFormatException ignored) {}
-        }
-
-        // 대기 정원 변경 시 Redis 잔여 대기석 조정
         String waitlistKey = "waitlist:course:" + courseId;
-        String waitlistVal = redisTemplate.opsForValue().get(waitlistKey);
-        if (waitlistVal != null) {
-            try {
-                int newRemaining = Math.max(0, Integer.parseInt(waitlistVal) + (request.getWaitlistLimit() - oldWaitlistLimit));
-                redisTemplate.opsForValue().set(waitlistKey, String.valueOf(newRemaining));
-            } catch (NumberFormatException ignored) {}
-        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                String enrollmentVal = redisTemplate.opsForValue().get(enrollmentKey);
+                if (enrollmentVal != null) {
+                    try {
+                        int newRemaining = Math.max(0, Integer.parseInt(enrollmentVal) + capacityDiff);
+                        redisTemplate.opsForValue().set(enrollmentKey, String.valueOf(newRemaining));
+                    } catch (NumberFormatException ignored) {}
+                }
+
+                String waitlistVal = redisTemplate.opsForValue().get(waitlistKey);
+                if (waitlistVal != null) {
+                    try {
+                        int newRemaining = Math.max(0, Integer.parseInt(waitlistVal) + waitlistDiff);
+                        redisTemplate.opsForValue().set(waitlistKey, String.valueOf(newRemaining));
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+        });
 
         // 교수가 정원 증가 시 대기자 알림
         if (request.getCapacity() > oldCapacity) {
