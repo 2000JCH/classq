@@ -127,7 +127,7 @@ public class AccountService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
 
-        Account account = accountRepository.findById(accountId)
+        Account account = accountRepository.findByIdAndDeletedAtIsNull(accountId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
 
         String newAccessToken = jwtUtil.createAccessToken(accountId, account.getRole().name());
