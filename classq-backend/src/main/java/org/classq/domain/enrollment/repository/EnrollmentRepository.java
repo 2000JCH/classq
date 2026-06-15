@@ -35,6 +35,9 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
     // 특정 강의의 soft delete 되지 않은 수강신청 목록 페이징 조회
     Page<Enrollment> findByCourse_IdAndDeletedAtIsNull(Long courseId, Pageable pageable);
 
+    // 폐강 시 해당 강의 수강 중인 학생 전체 조회
+    List<Enrollment> findByCourse_IdAndEnrollmentStatusAndDeletedAtIsNull(Long courseId, EnrollmentStatus status);
+
     // {------------ 수강신청 현황 통계 -----------------}
     // 전체 수강신청 수 (soft delete 제외)
     @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.deletedAt IS NULL")
