@@ -84,6 +84,7 @@ public class CourseService {
                 course.getCapacity(),
                 getRemainingCapacity(course),
                 course.getWaitlistLimit(),
+                getWaitlistRemaining(course),
                 course.getMinGrade(),
                 course.getMaxGrade(),
                 course.getCourseStatus()

@@ -3,6 +3,7 @@ package org.classq.domain.notification.service;
 import lombok.extern.slf4j.Slf4j;
 import org.classq.domain.notification.entity.Notification;
 import org.classq.domain.notification.entity.NotificationType;
+import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -47,9 +48,14 @@ public class SseEmitterService {
         }
 
         try {
+            Map<String, Object> payload = Map.of(
+                    "type", notification.getNotificationType().name(),
+                    "notificationId", notification.getId(),
+                    "message", notification.getMessage()
+            );
             emitter.send(SseEmitter.event()
                     .name(resolveEventName(notification.getNotificationType()))
-                    .data(notification.getMessage()));
+                    .data(payload, MediaType.APPLICATION_JSON));
         } catch (IOException e) {
             log.warn("SSE 전송 실패 - studentId: {}", studentId, e);
             emitters.remove(studentId);

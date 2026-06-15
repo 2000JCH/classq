@@ -50,6 +50,7 @@ public class Waitlist extends BaseEntity {
 
     public void expire() {
         this.waitlistStatus = WaitlistStatus.EXPIRED;
+        delete();
     }
 
     public void reactivate(int newRank) {

@@ -39,6 +39,7 @@ export interface CourseDetail {
   capacity: number
   remainingCapacity: number
   waitlistLimit: number
+  remainingWaitlist: number
   minGrade: number | null
   maxGrade: number | null
   status: CourseStatus
