@@ -79,7 +79,7 @@ public class CourseEventConsumer {
         // 정원 변경
         if (before != null && before.getCapacity() != null && after.getCapacity() != null
                 && !before.getCapacity().equals(after.getCapacity())) {
-            int enrolled = enrollmentRepository.countByCourse_IdAndEnrollmentStatus(courseId, EnrollmentStatus.COMPLETED);
+            int enrolled = enrollmentRepository.countByCourse_IdAndEnrollmentStatusAndDeletedAtIsNull(courseId, EnrollmentStatus.COMPLETED);
             int remaining = Math.max(0, after.getCapacity() - enrolled);
             redisTemplate.opsForValue().set("enrollment:course:" + courseId, String.valueOf(remaining));
             log.info("정원 변경 반영 - courseId: {}, 잔여: {}", courseId, remaining);
@@ -93,27 +93,16 @@ public class CourseEventConsumer {
         List<CourseSchedule> schedules = courseScheduleRepository.findByCourseId(courseId);
         String closedMessage = "'" + course.getName() + "' 강의가 폐강되었습니다.";
         List<Map.Entry<Long, Notification>> sseQueue = new ArrayList<>();
+        List<Long> enrolledStudentIds = new ArrayList<>();
 
-        // 1. 수강 중인 학생 처리 — soft-delete + Redis 학점/시간표 차감
+        // 1. 수강 중인 학생 처리 — soft-delete + 알림 저장
         List<Enrollment> enrollments = enrollmentRepository
                 .findByCourse_IdAndEnrollmentStatusAndDeletedAtIsNull(courseId, EnrollmentStatus.COMPLETED);
 
         for (Enrollment enrollment : enrollments) {
             Long studentId = enrollment.getStudent().getId();
             enrollment.delete();
-
-            String creditsKey = "credits:student:" + studentId;
-            if (Boolean.TRUE.equals(redisTemplate.hasKey(creditsKey))) {
-                redisTemplate.opsForValue().decrement(creditsKey, course.getCredits());
-            }
-
-            String scheduleKey = "schedule:student:" + studentId;
-            if (Boolean.TRUE.equals(redisTemplate.hasKey(scheduleKey))) {
-                for (CourseSchedule s : schedules) {
-                    redisTemplate.opsForSet().remove(scheduleKey,
-                            s.getCourseScheduleDay().name() + "|" + s.getStartTime() + "|" + s.getEndTime());
-                }
-            }
+            enrolledStudentIds.add(studentId);
 
             Notification notification = notificationRepository.save(Notification.builder()
                     .student(enrollment.getStudent())
@@ -124,7 +113,7 @@ public class CourseEventConsumer {
             sseQueue.add(new AbstractMap.SimpleEntry<>(studentId, notification));
         }
 
-        // 2. 대기 중인 학생 처리 — soft-delete
+        // 2. 대기 중인 학생 처리 — soft-delete + 알림 저장
         List<Waitlist> waitlists = waitlistRepository.findByCourse_IdAndWaitlistStatusInAndDeletedAtIsNull(
                 courseId, List.of(WaitlistStatus.WAITING, WaitlistStatus.NOTIFIED));
 
@@ -141,15 +130,30 @@ public class CourseEventConsumer {
             sseQueue.add(new AbstractMap.SimpleEntry<>(studentId, notification));
         }
 
-        // 3. Redis 키 삭제
-        redisTemplate.delete("lock:course:" + courseId);
-        redisTemplate.delete("enrollment:course:" + courseId);
-        redisTemplate.delete("waitlist:course:" + courseId);
+        // 3. DB 커밋 후 Redis 작업 + SSE 발송
+        int credits = course.getCredits();
+        List<String> scheduleEntries = schedules.stream()
+                .map(s -> s.getCourseScheduleDay().name() + "|" + s.getStartTime() + "|" + s.getEndTime())
+                .toList();
 
-        // 4. SSE 알림 — DB 커밋 후 발송
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
+                for (Long studentId : enrolledStudentIds) {
+                    String creditsKey = "credits:student:" + studentId;
+                    if (Boolean.TRUE.equals(redisTemplate.hasKey(creditsKey))) {
+                        redisTemplate.opsForValue().decrement(creditsKey, credits);
+                    }
+                    String scheduleKey = "schedule:student:" + studentId;
+                    if (Boolean.TRUE.equals(redisTemplate.hasKey(scheduleKey))) {
+                        for (String entry : scheduleEntries) {
+                            redisTemplate.opsForSet().remove(scheduleKey, entry);
+                        }
+                    }
+                }
+                redisTemplate.delete("lock:course:" + courseId);
+                redisTemplate.delete("enrollment:course:" + courseId);
+                redisTemplate.delete("waitlist:course:" + courseId);
                 for (Map.Entry<Long, Notification> entry : sseQueue) {
                     sseEmitterService.send(entry.getKey(), entry.getValue());
                 }

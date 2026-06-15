@@ -79,6 +79,7 @@ public class WaitlistService {
     }
 
     // 대기자 등록
+    @Transactional
     public WaitlistResponseDto register(Long accountId, Long courseId) {
         Student student = studentRepository.findByAccountIdAndDeletedAtIsNull(accountId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
@@ -122,7 +123,7 @@ public class WaitlistService {
                 // 취소 후 재등록 시 soft-delete 이력 재활성화 (unique constraint 충돌 방지)
                 Waitlist waitlist = waitlistRepository
                         .findByStudent_IdAndCourse_IdAndDeletedAtIsNotNull(studentId, courseId)
-                        .map(existing -> { existing.reactivate(rank); return existing; })
+                        .map(existing -> { existing.reactivate(rank); return waitlistRepository.save(existing); })
                         .orElseGet(() -> waitlistRepository.save(
                                 Waitlist.builder()
                                         .student(student)

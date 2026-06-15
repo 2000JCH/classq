@@ -16,7 +16,7 @@ import java.util.Optional;
 
 public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
-    int countByCourse_IdAndEnrollmentStatus(Long courseId, EnrollmentStatus status);
+    int countByCourse_IdAndEnrollmentStatusAndDeletedAtIsNull(Long courseId, EnrollmentStatus status);
 
     // 이미 수강신청 완료했는지 확인
     boolean existsByStudent_IdAndCourse_IdAndEnrollmentStatusAndDeletedAtIsNull(
