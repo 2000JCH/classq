@@ -130,8 +130,14 @@ public class CourseService {
             }
         }
 
-        redisTemplate.opsForValue().set("enrollment:course:" + course.getId(), String.valueOf(request.getCapacity()));
-        redisTemplate.opsForValue().set("waitlist:course:" + course.getId(), String.valueOf(request.getWaitlistLimit()));
+        long savedCourseId = course.getId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                redisTemplate.opsForValue().set("enrollment:course:" + savedCourseId, String.valueOf(request.getCapacity()));
+                redisTemplate.opsForValue().set("waitlist:course:" + savedCourseId, String.valueOf(request.getWaitlistLimit()));
+            }
+        });
 
         return course.getId();
     }
