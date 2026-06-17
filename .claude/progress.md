@@ -118,7 +118,7 @@
     - **문제**: `exists 체크 → count+1(rank 계산) → save` 3단계가 원자적이지 않음
     - **증상1 (중복 등록)**: 학생 A가 exists 체크 통과 직후, 같은 학생의 요청이 또 exists 체크를 통과하면 같은 학생이 두 번 대기 등록될 수 있음. 단, `(student_id, course_id)` unique constraint가 DB에 있어서 실제 INSERT 시 하나는 예외 발생 → 완전히 막히진 않음
     - **증상2 (rank 중복)**: 학생 A와 B가 동시에 count 조회 시 둘 다 같은 값을 읽어 같은 rank가 부여될 수 있음 (예: 둘 다 rank=3)
-    - **해결 방향**: 분산 락(Redisson) 적용 또는 DB 시퀀스/AUTO_INCREMENT로 rank 관리. 비관적 락(PESSIMISTIC_WRITE) / 낙관적 락(@Version) 도입도 검토.
+    - **해결 방향**:   락(Redisson) 적용 또는 DB 시퀀스/AUTO_INCREMENT로 rank 관리. 비관적 락(PESSIMISTIC_WRITE) / 낙관적 락(@Version) 도입도 검토.
 - [x] DELETE `/api/v1/waitlists/{waitlistId}` — 대기자 취소
   - Redis `INCR waitlist:course:{id}`
   - RDS UPDATE (soft delete)
@@ -254,24 +254,39 @@
 - [x] build.gradle Gatling 플러그인 추가
 - [x] Gatling 부하 테스트 시나리오 작성 (수강신청 폭주 시나리오)
 - [x] 로컬 환경에서 Gatling 부하 테스트 실행
-- [ ] Grafana로 병목 구간 확인 및 개선
+- [x] 시나리오 2 (대기자 등록 폭주) Gatling 작성 및 실행 — rank 정확도 검증 (Redisson 분산 락)
+- [ ] Grafana로 병목 구간 확인 및 개선 (AWS 배포 후 진행 예정)
 
-### 포트폴리오용 측정 항목 (개선 전 / 후 기록)
+### 로컬 부하 테스트 결과
 
-> 상세 수치는 `.claude/docs/load-test-results.md` 참고
-> 튜닝 완료 후 개선 후 수치 추가 예정
+> 로컬 환경 특성상 절대 수치보다 설계 검증에 의미. 실제 튜닝 before/after는 AWS에서 측정.
 
-| 항목 | 개선 전 | 개선 후 |
+**시나리오 1 — 수강신청 폭주 (300명 동시)**
+
+| 항목 | V1 (로그인+수강신청) | V2 (수강신청만) |
 |---|---|---|
-| 동시 요청 수 (VU) | 300명 | |
-| 평균 응답시간 (ms) | 2424ms | |
-| P95 응답시간 (ms) | 4079ms | |
-| P99 응답시간 (ms) | 4354ms | |
-| 처리량 (req/s) | 100 req/s | |
-| 에러율 (%) | 0% | |
-| RDS CPU 사용률 (%) | - | |
+| 평균 응답시간 | 2424ms | 1376ms |
+| P95 | 4079ms | 1773ms |
+| P99 | 4354ms | 1791ms |
+| 처리량 | 100 req/s | 150 req/s |
+| 에러율 | 0% | 0% |
 
-**개선 포인트 후보** (튜닝하면서 채워나가기)
+> V1 병목은 동시 로그인의 BCrypt+DB (HikariCP active=10, pending=91). V2는 수강신청 동기 구간(Redis-only) 단독 측정. P95 1.7s는 Kafka acks=all 의도적 설계.
+
+**시나리오 2 — 대기자 등록 폭주 (300명 동시, 대기 슬롯 30개)**
+
+| 항목 | 수치 |
+|---|---|
+| 평균 응답시간 | 1501ms |
+| P95 | 1996ms |
+| P99 | 2073ms |
+| 처리량 | 100 req/s |
+| 에러율 (KO) | 0% |
+| rank 중복 | 0건 ✅ |
+
+> P95 2s는 Redisson 락 직렬화로 인한 것 (30명 순차 처리). rank 정확도 보장과의 의도적 트레이드오프.
+
+**개선 포인트 후보** (AWS에서 측정 후 채워나가기)
 - Redis-only 동기 구간 → RDS 부하 감소율
 - Kafka 비동기 처리 → 응답시간 단축
 - HikariCP 커넥션 풀 튜닝 → 처리량 변화
