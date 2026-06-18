@@ -162,7 +162,6 @@ Consumer 그룹: `enrollment-processor` / Producer: `acks=all` / Consumer: `enab
 | `redis-design.md` | Redis 키별 초기화/갱신/삭제 시점, AOF 설정 이유, 장애 복구 방법 |
 | `frontend-design.md` | 프론트엔드 스택, CORS 설정, 토큰 관리 전략, SSE 연결 방식, axios interceptor |
 | `test-data.md` | 로컬 테스트용 학생/교수/강의 계정 정보, Gatling 부하 테스트 계정 패턴 |
-| `load-test-results.md` | Gatling 부하 테스트 결과 (100명/300명 baseline, 개선 후 수치 예정) |
 
 ## 협업 방식
 
