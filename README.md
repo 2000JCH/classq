@@ -192,4 +192,3 @@ Docker 및 백엔드 서버 실행 후 아래 명령어로 실행한다.
 | [redis-design.md](./.claude/docs/redis-design.md) | Redis Key 설계 |
 | [frontend-design.md](./.claude/docs/frontend-design.md) | 프론트엔드 설계 |
 | [test-data.md](./.claude/docs/test-data.md) | 로컬 테스트 계정 및 Gatling 부하 테스트 계정 |
-| [load-test-results.md](./.claude/docs/load-test-results.md) | Gatling 부하 테스트 결과 |
