@@ -83,8 +83,6 @@ public class EnrollmentFlowSimulation extends Simulation {
             jedis.set("enrollment:course:" + ENROLL_COURSE_ID, String.valueOf(USER_COUNT));
             jedis.set("enrollment:course:" + CHANGE_COURSE_ID, String.valueOf(USER_COUNT));
 
-            ScanParams params = new ScanParams().count(200);
-
             String cursor = "0";
             do {
                 var result = jedis.scan(cursor, new ScanParams().match("credits:student:*").count(200));
