@@ -9,6 +9,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.time.Duration;
 import java.util.*;
 import java.util.stream.Stream;
@@ -45,6 +48,9 @@ public class EnrollmentFlowSimulation extends Simulation {
     private static final int CHANGE_COURSE_ID = 4;   // 리더쉽
     private static final String REDIS_HOST = "localhost";
     private static final int REDIS_PORT = 6379;
+    private static final String DB_URL = "jdbc:mysql://localhost:3306/classq?serverTimezone=Asia/Seoul&characterEncoding=UTF-8";
+    private static final String DB_USER = "root";
+    private static final String DB_PASS = "root1234";
 
     private final Iterator<Map<String, Object>> userFeeder =
         Stream.iterate(1, i -> i + 1)
@@ -60,6 +66,17 @@ public class EnrollmentFlowSimulation extends Simulation {
     @Override
     public void before() {
         System.out.println("=== [EnrollmentFlow] 계정 생성 및 Redis 초기화 시작 ===");
+
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+             PreparedStatement ps = conn.prepareStatement(
+                     "DELETE FROM enrollment WHERE course_id IN (?, ?)")) {
+            ps.setInt(1, ENROLL_COURSE_ID);
+            ps.setInt(2, CHANGE_COURSE_ID);
+            int rows = ps.executeUpdate();
+            System.out.println("[EnrollmentFlow] DB enrollment 정리 완료: " + rows + "건 삭제");
+        } catch (Exception e) {
+            System.out.println("[EnrollmentFlow] DB 정리 실패: " + e.getMessage());
+        }
 
         HttpClient client = HttpClient.newHttpClient();
 
