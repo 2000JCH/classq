@@ -66,12 +66,13 @@ public class AccountService {
             if (request.getGrade() == null) {
                 throw new BusinessException(ErrorCode.INVALID_INPUT);
             }
-            studentRepository.save(Student.builder()
+            Student student = studentRepository.save(Student.builder()
                     .account(account)
                     .department(department)
                     .name(request.getName())
                     .grade(request.getGrade())
                     .build());
+            redisTemplate.opsForValue().set("student:account:" + account.getId(), String.valueOf(student.getId()));
         } else if (request.getRole() == Role.PROFESSOR) {
             professorRepository.save(Professor.builder()
                     .account(account)
@@ -99,12 +100,18 @@ public class AccountService {
         String accessToken = jwtUtil.createAccessToken(account.getId(), account.getRole().name());
         String refreshToken = jwtUtil.createRefreshToken(account.getId());
 
-        //레디스 refresh token 저장 (로그인 할 때마다 새 리프레시 토큰을 생성해서 Redis에 덮어쓴다)
         redisTemplate.opsForValue().set(
-                "refresh:token:" +account.getId(),
+                "refresh:token:" + account.getId(),
                 refreshToken,
                 jwtUtil.getRefreshTokenExpiration(), TimeUnit.MILLISECONDS
         );
+
+        // enroll() 동기 구간에서 DB 조회 없이 studentId를 바로 쓸 수 있도록 캐싱
+        if (account.getRole() == Role.STUDENT) {
+            studentRepository.findByAccountIdAndDeletedAtIsNull(account.getId())
+                    .ifPresent(s -> redisTemplate.opsForValue().setIfAbsent(
+                            "student:account:" + account.getId(), String.valueOf(s.getId())));
+        }
 
         return new TokenResponseDto(accessToken, refreshToken);
     }
