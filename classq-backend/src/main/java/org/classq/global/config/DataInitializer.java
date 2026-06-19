@@ -98,12 +98,14 @@ public class DataInitializer implements ApplicationRunner {
                     .status(AccountStatus.ACTIVE)
                     .build());
 
-            studentRepository.save(Student.builder()
+            Student student = studentRepository.save(Student.builder()
                     .account(account)
                     .department(csDept)
                     .name(s[0])
                     .grade(1)
                     .build());
+
+            redisTemplate.opsForValue().set("student:account:" + account.getId(), String.valueOf(student.getId()));
         }
     }
 
@@ -161,16 +163,28 @@ public class DataInitializer implements ApplicationRunner {
     }
 
     private void initCourseRedisKeysIfMissing() {
-        courseRepository.findAll().forEach(course -> {
+        for (Course course : courseRepository.findAll()) {
             String enrollmentKey = "enrollment:course:" + course.getId();
             String waitlistKey = "waitlist:course:" + course.getId();
+            String creditsKey = "course:" + course.getId() + ":credits";
+            String schedulesKey = "course:" + course.getId() + ":schedules";
+
             if (!Boolean.TRUE.equals(redisTemplate.hasKey(enrollmentKey))) {
                 redisTemplate.opsForValue().set(enrollmentKey, String.valueOf(course.getCapacity()));
             }
             if (!Boolean.TRUE.equals(redisTemplate.hasKey(waitlistKey))) {
                 redisTemplate.opsForValue().set(waitlistKey, String.valueOf(course.getWaitlistLimit()));
             }
-        });
+            if (!Boolean.TRUE.equals(redisTemplate.hasKey(creditsKey))) {
+                redisTemplate.opsForValue().set(creditsKey, String.valueOf(course.getCredits()));
+            }
+            if (!Boolean.TRUE.equals(redisTemplate.hasKey(schedulesKey))) {
+                for (CourseSchedule s : courseScheduleRepository.findByCourseId(course.getId())) {
+                    redisTemplate.opsForSet().add(schedulesKey,
+                            s.getCourseScheduleDay().name() + "|" + s.getStartTime() + "|" + s.getEndTime());
+                }
+            }
+        }
     }
 
     private void saveCourse(Professor professor, Department department, String name,
@@ -201,5 +215,8 @@ public class DataInitializer implements ApplicationRunner {
 
         redisTemplate.opsForValue().set("enrollment:course:" + course.getId(), String.valueOf(capacity));
         redisTemplate.opsForValue().set("waitlist:course:" + course.getId(), String.valueOf(waitlistLimit));
+        redisTemplate.opsForValue().set("course:" + course.getId() + ":credits", String.valueOf(credits));
+        redisTemplate.opsForSet().add("course:" + course.getId() + ":schedules",
+                day.name() + "|" + startTime + "|" + endTime);
     }
 }

@@ -2,7 +2,7 @@
   "title": "ClassQ 모니터링",
   "uid": "classq-monitoring",
   "schemaVersion": 39,
-  "time": { "from": "now-30m", "to": "now" },
+  "time": { "from": "now-5m", "to": "now" },
   "refresh": "15s",
   "panels": [
     {
@@ -12,7 +12,7 @@
       "gridPos": { "x": 0, "y": 0, "w": 24, "h": 8 },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"classq\"}[1m])) by (le, uri, method))",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"classq\"}[5m])) by (le, uri, method))",
           "legendFormat": "{{method}} {{uri}}"
         }
       ],

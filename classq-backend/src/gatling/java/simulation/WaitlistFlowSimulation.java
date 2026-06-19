@@ -9,6 +9,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.util.*;
 import java.util.stream.Stream;
 
@@ -45,6 +48,9 @@ public class WaitlistFlowSimulation extends Simulation {
     private static final int WAITLIST_LIMIT = 30;
     private static final String REDIS_HOST = "localhost";
     private static final int REDIS_PORT = 6379;
+    private static final String DB_URL = System.getenv().getOrDefault("GATLING_DB_URL", "jdbc:mysql://localhost:3306/classq?serverTimezone=Asia/Seoul&characterEncoding=UTF-8");
+    private static final String DB_USER = System.getenv().getOrDefault("GATLING_DB_USER", "root");
+    private static final String DB_PASS = System.getenv().getOrDefault("GATLING_DB_PASS", "root1234");
 
     private final Iterator<Map<String, Object>> userFeeder =
         Stream.iterate(1, i -> i + 1)
@@ -60,6 +66,15 @@ public class WaitlistFlowSimulation extends Simulation {
     @Override
     public void before() {
         System.out.println("=== [WaitlistFlow] 계정 생성 및 Redis 초기화 시작 ===");
+
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+             PreparedStatement ps = conn.prepareStatement("DELETE FROM waitlist WHERE course_id = ?")) {
+            ps.setInt(1, COURSE_ID);
+            int rows = ps.executeUpdate();
+            System.out.println("[WaitlistFlow] DB waitlist 정리 완료: " + rows + "건 삭제");
+        } catch (Exception e) {
+            throw new IllegalStateException("[WaitlistFlow] DB 정리 실패 — 테스트 중단: " + e.getMessage(), e);
+        }
 
         HttpClient client = HttpClient.newHttpClient();
 
@@ -84,8 +99,8 @@ public class WaitlistFlowSimulation extends Simulation {
             jedis.set("enrollment:course:" + COURSE_ID, "0");
             jedis.set("waitlist:course:" + COURSE_ID, String.valueOf(WAITLIST_LIMIT));
 
-            // 이전 테스트 Redisson 분산 락 제거
-            jedis.del("waitlist-rank:course:" + COURSE_ID);
+            // rank 카운터 초기화
+            jedis.set("waitlist:rank:counter:course:" + COURSE_ID, "0");
 
             String cursor = "0";
             do {
