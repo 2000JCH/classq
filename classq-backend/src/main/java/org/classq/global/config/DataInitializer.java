@@ -169,6 +169,9 @@ public class DataInitializer implements ApplicationRunner {
             String creditsKey = "course:" + course.getId() + ":credits";
             String schedulesKey = "course:" + course.getId() + ":schedules";
 
+            String nameKey = "course:" + course.getId() + ":name";
+            String rankCounterKey = "waitlist:rank:counter:course:" + course.getId();
+
             if (!Boolean.TRUE.equals(redisTemplate.hasKey(enrollmentKey))) {
                 redisTemplate.opsForValue().set(enrollmentKey, String.valueOf(course.getCapacity()));
             }
@@ -177,6 +180,12 @@ public class DataInitializer implements ApplicationRunner {
             }
             if (!Boolean.TRUE.equals(redisTemplate.hasKey(creditsKey))) {
                 redisTemplate.opsForValue().set(creditsKey, String.valueOf(course.getCredits()));
+            }
+            if (!Boolean.TRUE.equals(redisTemplate.hasKey(nameKey))) {
+                redisTemplate.opsForValue().set(nameKey, course.getName());
+            }
+            if (!Boolean.TRUE.equals(redisTemplate.hasKey(rankCounterKey))) {
+                redisTemplate.opsForValue().set(rankCounterKey, "0");
             }
             if (!Boolean.TRUE.equals(redisTemplate.hasKey(schedulesKey))) {
                 for (CourseSchedule s : courseScheduleRepository.findByCourseId(course.getId())) {
@@ -216,6 +225,8 @@ public class DataInitializer implements ApplicationRunner {
         redisTemplate.opsForValue().set("enrollment:course:" + course.getId(), String.valueOf(capacity));
         redisTemplate.opsForValue().set("waitlist:course:" + course.getId(), String.valueOf(waitlistLimit));
         redisTemplate.opsForValue().set("course:" + course.getId() + ":credits", String.valueOf(credits));
+        redisTemplate.opsForValue().set("course:" + course.getId() + ":name", name);
+        redisTemplate.opsForValue().set("waitlist:rank:counter:course:" + course.getId(), "0");
         redisTemplate.opsForSet().add("course:" + course.getId() + ":schedules",
                 day.name() + "|" + startTime + "|" + endTime);
     }

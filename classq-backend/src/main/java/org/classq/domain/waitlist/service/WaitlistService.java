@@ -3,7 +3,6 @@ package org.classq.domain.waitlist.service;
 import lombok.RequiredArgsConstructor;
 import org.classq.domain.course.entity.Course;
 import org.classq.domain.course.repository.CourseRepository;
-import org.classq.domain.enrollment.entity.EnrollmentStatus;
 import org.classq.domain.enrollment.repository.EnrollmentRepository;
 import org.classq.domain.enrollment.service.EnrollmentService;
 import org.classq.domain.notification.entity.Notification;
@@ -12,8 +11,6 @@ import org.classq.domain.notification.repository.NotificationRepository;
 import org.classq.domain.notification.service.SseEmitterService;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.redisson.api.RLock;
-import org.redisson.api.RedissonClient;
 import org.springframework.transaction.annotation.Transactional;
 import org.classq.domain.student.entity.Student;
 import org.classq.domain.student.repository.StudentRepository;
@@ -30,7 +27,6 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -44,7 +40,6 @@ public class WaitlistService {
     private final SseEmitterService sseEmitterService;
     private final EnrollmentService enrollmentService;
     private final RedisTemplate<String, String> redisTemplate;
-    private final RedissonClient redissonClient;
 
     // 내 대기 목록 조회
     @Transactional(readOnly = true)
@@ -81,68 +76,45 @@ public class WaitlistService {
     // 대기자 등록
     @Transactional
     public WaitlistResponseDto register(Long accountId, Long courseId) {
-        Student student = studentRepository.findByAccountIdAndDeletedAtIsNull(accountId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.STUDENT_NOT_FOUND));
+        // 1. studentId — Redis 캐시 (로그인 시 세팅)
+        String studentIdStr = redisTemplate.opsForValue().get("student:account:" + accountId);
+        if (studentIdStr == null) throw new BusinessException(ErrorCode.STUDENT_NOT_FOUND);
+        Long studentId = Long.valueOf(studentIdStr);
 
-        Course course = courseRepository.findById(courseId)
-                .filter(c -> c.getDeletedAt() == null)
-                .orElseThrow(() -> new BusinessException(ErrorCode.COURSE_NOT_FOUND));
+        // 2. 강의 존재 확인 — Redis 캐시 (DataInitializer 시 세팅)
+        String courseName = redisTemplate.opsForValue().get("course:" + courseId + ":name");
+        if (courseName == null) throw new BusinessException(ErrorCode.COURSE_NOT_FOUND);
 
-        Long studentId = student.getId();
-
-        // 1. 이미 수강신청 완료 여부 확인
-        if (enrollmentRepository.existsByStudent_IdAndCourse_IdAndEnrollmentStatusAndDeletedAtIsNull(
-                studentId, courseId, EnrollmentStatus.COMPLETED)) {
-            throw new BusinessException(ErrorCode.DUPLICATE_ENROLLMENT);
-        }
-
-        // 2. 이미 대기 신청 여부 확인
-        if (waitlistRepository.existsByCourse_IdAndStudent_IdAndWaitlistStatusInAndDeletedAtIsNull(
-                courseId, studentId, List.of(WaitlistStatus.WAITING, WaitlistStatus.NOTIFIED))) {
-            throw new BusinessException(ErrorCode.DUPLICATE_WAITLIST);
-        }
-
-        // 3. 대기 자리 차감 (음수면 롤백 후 거절)
-        Long remaining = redisTemplate.opsForValue().decrement("waitlist:course:" + courseId);  // -1 하고 벨류값 반환
+        // 3. 대기 슬롯 차감 (음수면 롤백 후 거절)
+        Long remaining = redisTemplate.opsForValue().decrement("waitlist:course:" + courseId);
         if (remaining == null || remaining < 0) {
-            redisTemplate.opsForValue().increment("waitlist:course:" + courseId);   // 대기자리에 +1 해줌 다시 0으로 만들기 위해
+            redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
             throw new BusinessException(ErrorCode.WAITLIST_CLOSED);
         }
 
-        // 4. 분산 락으로 rank 계산 + INSERT 직렬화 (rank 중복 방지)
-        RLock lock = redissonClient.getLock("waitlist-rank:course:" + courseId);
-        try {
-            if (!lock.tryLock(5, 3, TimeUnit.SECONDS)) {
-                redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
-                throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
-            }
-            try {
-                int rank = waitlistRepository.countByCourse_IdAndWaitlistStatusInAndDeletedAtIsNull(
-                        courseId, List.of(WaitlistStatus.WAITING, WaitlistStatus.NOTIFIED)) + 1;
+        // 4. rank — Redis INCR (원자적, Redisson 락 불필요)
+        int rank = redisTemplate.opsForValue().increment("waitlist:rank:counter:course:" + courseId).intValue();
 
-                // 취소 후 재등록 시 soft-delete 이력 재활성화 (unique constraint 충돌 방지)
-                Waitlist waitlist = waitlistRepository
-                        .findByStudent_IdAndCourse_IdAndDeletedAtIsNotNull(studentId, courseId)
-                        .map(existing -> { existing.reactivate(rank); return waitlistRepository.save(existing); })
-                        .orElseGet(() -> waitlistRepository.save(
-                                Waitlist.builder()
-                                        .student(student)
-                                        .course(course)
-                                        .rank(rank)
-                                        .build()
-                        ));
-                return new WaitlistResponseDto(waitlist.getId(), courseId, course.getName(), rank, WaitlistStatus.WAITING);
-            } catch (BusinessException e) {
-                redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
-                throw e;
-            } catch (Exception e) {
-                redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
-                throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
-            } finally {
-                lock.unlock();
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        // 5. DB INSERT (재활성화 or 신규)
+        try {
+            Waitlist waitlist = waitlistRepository
+                    .findByStudent_IdAndCourse_IdAndDeletedAtIsNotNull(studentId, courseId)
+                    .map(existing -> {
+                        existing.reactivate(rank);
+                        return waitlistRepository.save(existing);
+                    })
+                    .orElseGet(() -> waitlistRepository.save(
+                            Waitlist.builder()
+                                    .student(studentRepository.getReferenceById(studentId))
+                                    .course(courseRepository.getReferenceById(courseId))
+                                    .rank(rank)
+                                    .build()
+                    ));
+            return new WaitlistResponseDto(waitlist.getId(), courseId, courseName, rank, WaitlistStatus.WAITING);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
+            throw new BusinessException(ErrorCode.DUPLICATE_WAITLIST);
+        } catch (Exception e) {
             redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
