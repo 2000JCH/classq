@@ -37,6 +37,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -202,14 +203,19 @@ public class CourseService {
                     .isPresent();
 
             if (!alreadyNotified) {
-                // ZSET에서 rank 1번 waitlistId 조회 후 행 단위 비관적 락
-                String nextIdStr = Optional.ofNullable(
-                        redisTemplate.opsForZSet().range("waitlist:zset:course:" + courseId, 0, 0)
-                ).flatMap(set -> set.stream().findFirst()).orElse(null);
-
-                Optional<Waitlist> nextOpt = nextIdStr == null ? Optional.empty()
-                        : waitlistRepository.findByIdForUpdate(Long.valueOf(nextIdStr))
+                // ZSET 상위 후보를 순서대로 검증해 첫 유효 WAITING 대기자 선택 (stale member 건너뜀)
+                Set<String> candidates = redisTemplate.opsForZSet().range("waitlist:zset:course:" + courseId, 0, 2);
+                Optional<Waitlist> nextOpt = Optional.empty();
+                if (candidates != null) {
+                    for (String id : candidates) {
+                        Optional<Waitlist> candidate = waitlistRepository.findByIdForUpdate(Long.valueOf(id))
                                 .filter(w -> w.getWaitlistStatus() == WaitlistStatus.WAITING && w.getDeletedAt() == null);
+                        if (candidate.isPresent()) {
+                            nextOpt = candidate;
+                            break;
+                        }
+                    }
+                }
 
                 if (nextOpt.isPresent()) {
                     Waitlist waitlist = nextOpt.get();

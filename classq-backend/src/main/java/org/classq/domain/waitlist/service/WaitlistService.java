@@ -28,6 +28,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -240,17 +241,20 @@ public class WaitlistService {
         String zsetKey = ZSET_PREFIX + courseId;
         String expiredIdStr = String.valueOf(managed.getId());
 
-        // 다음 대기자: ZSET 상위 3개 중 만료 대상 제외한 첫 번째
-        // (만료 대상은 afterCommit 전까지 ZSET에 남아있으므로 필터 필요)
+        // 다음 대기자: ZSET 상위 3개 중 만료 대상을 제외하고 유효한 WAITING을 순서대로 탐색
+        // stale member(soft-delete 등)가 앞에 있어도 건너뛰고 실제 유효 대기자를 찾기 위해 루프 사용
         Set<String> topEntries = redisTemplate.opsForZSet().range(zsetKey, 0, 2);
-        String nextIdStr = (topEntries != null) ? topEntries.stream()
-                .filter(id -> !id.equals(expiredIdStr))
-                .findFirst().orElse(null) : null;
-
         Optional<Waitlist> nextOpt = Optional.empty();
-        if (nextIdStr != null) {
-            nextOpt = waitlistRepository.findById(Long.valueOf(nextIdStr))
-                    .filter(w -> w.getDeletedAt() == null && w.getWaitlistStatus() == WaitlistStatus.WAITING);
+        if (topEntries != null) {
+            for (String id : topEntries) {
+                if (id.equals(expiredIdStr)) continue;
+                Optional<Waitlist> candidate = waitlistRepository.findById(Long.valueOf(id))
+                        .filter(w -> w.getDeletedAt() == null && w.getWaitlistStatus() == WaitlistStatus.WAITING);
+                if (candidate.isPresent()) {
+                    nextOpt = candidate;
+                    break;
+                }
+            }
         }
 
         if (nextOpt.isPresent()) {
@@ -272,6 +276,8 @@ public class WaitlistService {
                     // 만료된 대기자 ZSET 제거 (DB 커밋 확정 후)
                     redisTemplate.opsForZSet().remove(zsetKey, expiredIdStr);
                     redisTemplate.opsForValue().increment("waitlist:course:" + courseId);
+                    // 새 대기자의 10분 수락 창 보장을 위해 lock TTL 재설정
+                    redisTemplate.opsForValue().set("lock:course:" + courseId, "1", 15, TimeUnit.MINUTES);
                     sseEmitterService.send(nextStudentId, notification);
                 }
             });

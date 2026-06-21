@@ -25,6 +25,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -63,14 +64,17 @@ public class EnrollmentCancelConsumer {
         // 2. ZSET에서 rank 1번 waitlistId 조회 → 해당 행 비관적 락
         //    동시에 2개 취소 이벤트가 들어올 때: 둘 다 같은 ID를 조회 →
         //    findByIdForUpdate에서 DB 행 락으로 직렬화 → TOCTOU 보호 유지
-        String nextIdStr = Optional.ofNullable(
-                redisTemplate.opsForZSet().range("waitlist:zset:course:" + event.getCourseId(), 0, 0)
-        ).flatMap(set -> set.stream().findFirst()).orElse(null);
-
+        Set<String> candidates = redisTemplate.opsForZSet().range("waitlist:zset:course:" + event.getCourseId(), 0, 2);
         Optional<Waitlist> waitlistOpt = Optional.empty();
-        if (nextIdStr != null) {
-            waitlistOpt = waitlistRepository.findByIdForUpdate(Long.valueOf(nextIdStr))
-                    .filter(w -> w.getWaitlistStatus() == WaitlistStatus.WAITING && w.getDeletedAt() == null);
+        if (candidates != null) {
+            for (String id : candidates) {
+                Optional<Waitlist> candidate = waitlistRepository.findByIdForUpdate(Long.valueOf(id))
+                        .filter(w -> w.getWaitlistStatus() == WaitlistStatus.WAITING && w.getDeletedAt() == null);
+                if (candidate.isPresent()) {
+                    waitlistOpt = candidate;
+                    break;
+                }
+            }
         }
 
         // 멱등성 보완 — 이미 NOTIFIED 대기자가 있으면 중복 알림 발송 방지
