@@ -7,7 +7,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -24,11 +23,6 @@ public interface WaitlistRepository extends JpaRepository<Waitlist, Long> {
 
     // rank 1번 WAITING 대기자 조회 (Cancel Consumer에서 사용)
     Optional<Waitlist> findFirstByCourse_IdAndWaitlistStatusAndDeletedAtIsNullOrderByRankAsc(Long courseId, WaitlistStatus status);
-
-    // rank 1번 WAITING 대기자 조회 + 비관적 락 (Cancel Consumer TOCTOU 방지)
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT w FROM Waitlist w WHERE w.course.id = :courseId AND w.waitlistStatus = :status AND w.deletedAt IS NULL ORDER BY w.rank ASC")
-    List<Waitlist> findTopWaitingByCourseIdForUpdate(@Param("courseId") Long courseId, @Param("status") WaitlistStatus status, Pageable pageable);
 
     // 이미 대기 신청 여부 확인
     boolean existsByCourse_IdAndStudent_IdAndWaitlistStatusInAndDeletedAtIsNull(Long courseId, Long studentId, List<WaitlistStatus> statuses);
@@ -51,8 +45,4 @@ public interface WaitlistRepository extends JpaRepository<Waitlist, Long> {
     // 폐강 시 해당 강의 활성 대기자 전체 조회
     List<Waitlist> findByCourse_IdAndWaitlistStatusInAndDeletedAtIsNull(Long courseId, List<WaitlistStatus> statuses);
 
-    // 특정 rank보다 뒤에 있는 활성 대기자 rank 일괄 감소 (대기자 이탈 시 순번 갱신)
-    @Modifying
-    @Query("UPDATE Waitlist w SET w.rank = w.rank - 1 WHERE w.course.id = :courseId AND w.rank > :rank AND w.deletedAt IS NULL AND w.waitlistStatus IN ('WAITING', 'NOTIFIED')")
-    void decrementRanksAfter(@Param("courseId") Long courseId, @Param("rank") int rank);
 }

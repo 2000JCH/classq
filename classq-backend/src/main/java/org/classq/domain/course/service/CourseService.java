@@ -27,7 +27,6 @@ import org.classq.domain.waitlist.repository.WaitlistRepository;
 import org.classq.global.exception.BusinessException;
 import org.classq.global.exception.ErrorCode;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -37,6 +36,8 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -202,11 +203,22 @@ public class CourseService {
                     .isPresent();
 
             if (!alreadyNotified) {
-                List<Waitlist> waiting = waitlistRepository
-                        .findTopWaitingByCourseIdForUpdate(courseId, WaitlistStatus.WAITING, PageRequest.of(0, 1));
+                // ZSET 상위 후보를 순서대로 검증해 첫 유효 WAITING 대기자 선택 (stale member 건너뜀)
+                Set<String> candidates = redisTemplate.opsForZSet().range("waitlist:zset:course:" + courseId, 0, 2);
+                Optional<Waitlist> nextOpt = Optional.empty();
+                if (candidates != null) {
+                    for (String id : candidates) {
+                        Optional<Waitlist> candidate = waitlistRepository.findByIdForUpdate(Long.valueOf(id))
+                                .filter(w -> w.getWaitlistStatus() == WaitlistStatus.WAITING && w.getDeletedAt() == null);
+                        if (candidate.isPresent()) {
+                            nextOpt = candidate;
+                            break;
+                        }
+                    }
+                }
 
-                if (!waiting.isEmpty()) {
-                    Waitlist waitlist = waiting.get(0);
+                if (nextOpt.isPresent()) {
+                    Waitlist waitlist = nextOpt.get();
                     waitlist.notified();
 
                     Notification notification = notificationRepository.save(

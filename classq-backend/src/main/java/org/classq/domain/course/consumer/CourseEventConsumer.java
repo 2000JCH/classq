@@ -154,6 +154,7 @@ public class CourseEventConsumer {
                 redisTemplate.delete("lock:course:" + courseId);
                 redisTemplate.delete("enrollment:course:" + courseId);
                 redisTemplate.delete("waitlist:course:" + courseId);
+                redisTemplate.delete("waitlist:zset:course:" + courseId);
                 for (Map.Entry<Long, Notification> entry : sseQueue) {
                     sseEmitterService.send(entry.getKey(), entry.getValue());
                 }
