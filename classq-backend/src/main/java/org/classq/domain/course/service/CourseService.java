@@ -27,7 +27,6 @@ import org.classq.domain.waitlist.repository.WaitlistRepository;
 import org.classq.global.exception.BusinessException;
 import org.classq.global.exception.ErrorCode;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -37,6 +36,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -202,11 +202,17 @@ public class CourseService {
                     .isPresent();
 
             if (!alreadyNotified) {
-                List<Waitlist> waiting = waitlistRepository
-                        .findTopWaitingByCourseIdForUpdate(courseId, WaitlistStatus.WAITING, PageRequest.of(0, 1));
+                // ZSET에서 rank 1번 waitlistId 조회 후 행 단위 비관적 락
+                String nextIdStr = Optional.ofNullable(
+                        redisTemplate.opsForZSet().range("waitlist:zset:course:" + courseId, 0, 0)
+                ).flatMap(set -> set.stream().findFirst()).orElse(null);
 
-                if (!waiting.isEmpty()) {
-                    Waitlist waitlist = waiting.get(0);
+                Optional<Waitlist> nextOpt = nextIdStr == null ? Optional.empty()
+                        : waitlistRepository.findByIdForUpdate(Long.valueOf(nextIdStr))
+                                .filter(w -> w.getWaitlistStatus() == WaitlistStatus.WAITING && w.getDeletedAt() == null);
+
+                if (nextOpt.isPresent()) {
+                    Waitlist waitlist = nextOpt.get();
                     waitlist.notified();
 
                     Notification notification = notificationRepository.save(
