@@ -63,6 +63,7 @@
 - [x] Kafka 토픽 생성
   - `enrollment-events` (파티션 3개)
   - `enrollment-cancel-events` (파티션 1개)
+  - `waitlist-promote-events` (파티션 1개) — 대기자 순번 프로모션, 단일 파티션으로 순서 보장
   - `course-events` (파티션 1개)
   - `enrollment-dead-letter` (파티션 1개)
 - [x] Kafka Producer 설정 (acks=all)
@@ -259,38 +260,35 @@
 
 ### 로컬 부하 테스트 결과
 
-> 로컬 환경 특성상 절대 수치보다 설계 검증에 의미. 실제 튜닝 before/after는 AWS에서 측정.
+> 로컬 환경 특성상 절대 수치보다 설계 검증에 의미. 실제 튜닝 before/after는 AWS에서 측정. 상세 결과는 `.claude/docs/load-test.md` 참고.
 
-**시나리오 1 — 수강신청 폭주 (300명 동시)**
+**시나리오 1 — 수강신청 전체 플로우 (EnrollmentFlowSimulation, 300명 동시)**
 
-| 항목 | V1 (로그인+수강신청) | V2 (수강신청만) |
-|---|---|---|
-| 평균 응답시간 | 2424ms | 1376ms |
-| P95 | 4079ms | 1773ms |
-| P99 | 4354ms | 1791ms |
-| 처리량 | 100 req/s | 150 req/s |
-| 에러율 | 0% | 0% |
+| 항목 | Before (DB) | After (Redis-only) | 개선 |
+|---|---|---|---|
+| P95 | 4636ms | 2845ms | **-39%** |
+| 처리량 | 109 req/s | 156 req/s | **+43%** |
+| HikariCP 대기 | 180개 | ~0개 | — |
+| 에러율 | 0% | 0% | — |
 
-> V1 병목은 동시 로그인의 BCrypt+DB (HikariCP active=10, pending=91). V2는 수강신청 동기 구간(Redis-only) 단독 측정. P95 1.7s는 Kafka acks=all 의도적 설계.
+> 개선 원인: `enroll()` 동기 구간 DB 쿼리 4개 → Redis 캐시 조회로 대체. HikariCP 대기 180 → 0으로 커넥션 풀 압박 해소 확인.
 
-**시나리오 2 — 대기자 등록 폭주 (300명 동시, 대기 슬롯 30개)**
+**시나리오 2 — 대기자 전체 플로우 (WaitlistFlowSimulation, 300명 동시, 대기 슬롯 30개)**
 
-| 항목 | 수치 |
-|---|---|
-| 평균 응답시간 | 1501ms |
-| P95 | 1996ms |
-| P99 | 2073ms |
-| 처리량 | 100 req/s |
-| 에러율 (KO) | 0% |
-| rank 중복 | 0건 ✅ |
+| 항목 | Before (DB) | After 1 (Redis) | After 2 (ZSET) | After 3 (Kafka) |
+|---|---|---|---|---|
+| P95 | 3266ms | 4060ms | 4693ms | **3503ms** |
+| 처리량 | 142 req/s | 124 req/s | 116 req/s | **148 req/s** |
+| HikariCP 대기 | 189 | 80 | ~0 | ~0 |
+| 에러율 | 2.51% | 2.71% | 0% | **0%** |
 
-> P95 2s는 Redisson 락 직렬화로 인한 것 (30명 순차 처리). rank 정확도 보장과의 의도적 트레이드오프.
+> After 3 핵심: ZSET 제거 + Kafka 단일 파티션으로 순서 보장 이관. After 2 대비 P95 -25%, 처리량 +28%.
+> 에러 원인 변천: DB 데드락(Before) → cancel() 데드락 심화(After 1) → 데드락 구조 제거(After 2) → 응답시간 추가 개선(After 3)
 
 **개선 포인트 후보** (AWS에서 측정 후 채워나가기)
-- Redis-only 동기 구간 → RDS 부하 감소율
-- Kafka 비동기 처리 → 응답시간 단축
 - HikariCP 커넥션 풀 튜닝 → 처리량 변화
 - 인덱스 추가 → 슬로우 쿼리 개선
+- Kafka Consumer 병렬 처리 확장 (enrollment-events 3파티션 활용)
 
 ---
 
