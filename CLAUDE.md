@@ -108,6 +108,7 @@ Redis는 AOF(`appendonly yes`) 방식으로 설정하여 장애 시 데이터를
 |---|---|---|
 | `enrollment-events` | 3 | 애플리케이션 |
 | `enrollment-cancel-events` | 1 | 애플리케이션 |
+| `waitlist-promote-events` | 1 | 애플리케이션 (`expireAndPromoteNext`) |
 | `course-events` | 1 | Debezium CDC |
 | `enrollment-dead-letter` | 1 | Consumer 재시도 실패 |
 

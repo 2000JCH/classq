@@ -23,9 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -61,21 +59,10 @@ public class EnrollmentCancelConsumer {
 
         enrollment.cancel();
 
-        // 2. ZSET에서 rank 1번 waitlistId 조회 → 해당 행 비관적 락
-        //    동시에 2개 취소 이벤트가 들어올 때: 둘 다 같은 ID를 조회 →
-        //    findByIdForUpdate에서 DB 행 락으로 직렬화 → TOCTOU 보호 유지
-        Set<String> candidates = redisTemplate.opsForZSet().range("waitlist:zset:course:" + event.getCourseId(), 0, 2);
-        Optional<Waitlist> waitlistOpt = Optional.empty();
-        if (candidates != null) {
-            for (String id : candidates) {
-                Optional<Waitlist> candidate = waitlistRepository.findByIdForUpdate(Long.valueOf(id))
-                        .filter(w -> w.getWaitlistStatus() == WaitlistStatus.WAITING && w.getDeletedAt() == null);
-                if (candidate.isPresent()) {
-                    waitlistOpt = candidate;
-                    break;
-                }
-            }
-        }
+        // 2. DB에서 rank 순으로 첫 번째 WAITING 대기자 조회
+        Optional<Waitlist> waitlistOpt = waitlistRepository
+                .findFirstByCourse_IdAndWaitlistStatusAndDeletedAtIsNullOrderByRankAsc(
+                        event.getCourseId(), WaitlistStatus.WAITING);
 
         // 멱등성 보완 — 이미 NOTIFIED 대기자가 있으면 중복 알림 발송 방지
         boolean alreadyNotified = waitlistRepository

@@ -148,26 +148,30 @@ Kafka 브로커까지 이벤트가 도달하면 유실이 없다. Consumer가 RD
 자리가 생기면 즉시 잠금을 세팅하여 다른 학생의 신청을 막고, 순번 1번 대기자에게 알림을 발송한다. 10분 내 미수락 시 Scheduler가 다음 순번으로 넘기며, 더 이상 대기자가 없으면 잠금을 해제한다.
 
 ```
-[자리 발생 시]
-1. SET lock:course:{id} (TTL 없음)
-2. waitlist status = NOTIFIED
-3. expired_at = 현재 + 10분
-4. notification INSERT (WAITLIST_AVAILABLE)
+[자리 발생 시 — EnrollmentCancelConsumer / WaitlistPromoteConsumer]
+1. DB ORDER BY rank ASC로 첫 번째 WAITING 대기자 조회
+   ├── 대기자 있음
+   │   ├── SET lock:course:{id} (TTL 15분)
+   │   ├── waitlist status = NOTIFIED
+   │   ├── expired_at = 현재 + 10분
+   │   └── notification INSERT (WAITLIST_AVAILABLE) + SSE 전송
+   └── 대기자 없음 → DEL lock:course:{id}
 
-[Scheduler 1분마다 실행]
-5. expired_at 지났는데 status = NOTIFIED인 대기자 조회
+[Scheduler 1분마다 실행 — 만료 처리]
+2. expired_at 지났는데 status = NOTIFIED인 대기자 조회
    ├── 발견됨
    │   ├── status = EXPIRED
-   │   ├── 다음 순번 있음 → 잠금 유지 + 알림 발송
-   │   └── 다음 순번 없음 → DEL lock:course:{id}
+   │   ├── INCR waitlist:course:{id} (슬롯 반환)
+   │   └── waitlist-promote-events Kafka 발행 (afterCommit)
+   │       → WaitlistPromoteConsumer가 다음 순번 처리
    └── 없음 → 종료
 
 [대기자 수락 시]
-6. 학점 초과 or 시간 중복 체크
-   ├── 실패 → status = EXPIRED → 다음 순번으로
+3. 학점 초과 or 시간 중복 체크
+   ├── 실패 → status = EXPIRED → waitlist-promote-events Kafka 발행
    └── 성공
        ├── Redis DECR enrollment:course:{id}
-       ├── Kafka 발행 → 일반 수강신청 흐름과 동일
+       ├── Kafka enrollment-events 발행 → 일반 수강신청 흐름과 동일
        └── DEL lock:course:{id}
 ```
 
@@ -177,13 +181,17 @@ Kafka 브로커까지 이벤트가 도달하면 유실이 없다. Consumer가 RD
 
 | 항목 | 내용 |
 |---|---|
-| 토픽 | enrollment-events, enrollment-cancel-events, course-events, enrollment-dead-letter |
-| 파티션 수 | enrollment-events: 3개, 나머지: 1개 |
-| Consumer Group | enrollment-processor (수강신청/취소 처리) |
-| Producer 설정 | acks=all |
-| 메시지 보존 | 기본 7일 |
+| 토픽 | 파티션 수 | 발행 주체 |
+|---|---|---|
+| `enrollment-events` | 3 | 애플리케이션 |
+| `enrollment-cancel-events` | 1 | 애플리케이션 |
+| `waitlist-promote-events` | 1 | 애플리케이션 (`expireAndPromoteNext`) |
+| `course-events` | 1 | Debezium CDC |
+| `enrollment-dead-letter` | 1 | Consumer 재시도 실패 |
 
-enrollment-events를 3개 파티션으로 구성한 이유는 수강신청 폭주 구간에서 Consumer를 병렬로 확장하여 처리량을 높이기 위해서다.
+Consumer Group: `enrollment-processor` / Producer: `acks=all` / Consumer: `enable-auto-commit=false`
+
+enrollment-events를 3개 파티션으로 구성한 이유는 수강신청 폭주 구간에서 Consumer를 병렬로 확장하여 처리량을 높이기 위해서다. waitlist-promote-events를 1개 파티션으로 구성한 이유는 대기자 순번 처리를 반드시 직렬화해야 하기 때문이다. 단일 파티션이 순서 보장을 담당하므로 Redis Sorted Set 없이도 먼저 등록한 순서대로 프로모션된다.
 
 ---
 

@@ -39,7 +39,12 @@
   - Before (DB 직접 조회): P95 3266ms, 처리량 142 req/s, HikariCP 대기 189, 500에러 25건
   - WaitlistService Redis 전환: register() DB 쿼리 6개 → 1~2개, Redisson 락 제거, rank Redis INCR
   - After (Redis): P95 4060ms, 처리량 124 req/s, HikariCP 대기 80 (-58%) — cancel() 데드락이 병목으로 P95 개선 없음
-- [ ] Gatling 시나리오 추가 — 알림 수락 플로우 (NotificationAcceptSimulation) → 아래 설계 참고
+- [x] **[완료]** decrementRanksAfter 데드락 해결 — Redis Sorted Set(B안) 도입 (2026-06-21)
+  - `waitlist:zset:course:{id}` Sorted Set으로 순번 관리 전환, bulk UPDATE 제거로 데드락 구조 근본 제거
+  - 에러율 2.71% → 0%, HikariCP 커넥션 대기 ~0 달성
+  - 코드래빗 리뷰 반영: stale ZSET head 루프 수정(CourseService, EnrollmentCancelConsumer, WaitlistService), 승격 시 lock TTL 재설정
+- [x] **[완료]** 노션 부하 테스트 페이지 — After 2 (Sorted Set) 결과 업데이트 (2026-06-21)
+- [ ] Gatling 시나리오 추가 — 알림 수락 플로우 (NotificationAcceptSimulation) → 보류
 - [ ] 노션 부하 테스트 페이지 — AWS 인스턴스 스펙별 성능 예측 표 추가 (t3.small → c4.xlarge 등)
 - [ ] 노션 부하 테스트 페이지 — t/c/r 계열 특성 + ClassQ 권장 스펙 정리
 - [ ] 목표 SLO 정의 후 문서 반영 (ex. 300명 P95 < 1s)
