@@ -35,4 +35,11 @@ public class KafkaTopicConfig {
                 .partitions(1)
                 .build();
     }
+
+    @Bean
+    public NewTopic waitlistPromoteEventsTopic() {
+        return TopicBuilder.name("waitlist-promote-events")
+                .partitions(1)
+                .build();
+    }
 }
