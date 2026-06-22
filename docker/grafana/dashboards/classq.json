@@ -17,7 +17,12 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "s" }
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "max": 5,
+          "decimals": 0
+        }
       }
     },
     {

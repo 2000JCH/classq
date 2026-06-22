@@ -82,7 +82,7 @@ public class EnrollmentFlowSimulation extends Simulation {
 
         for (int i = 1; i <= USER_COUNT; i++) {
             String body = String.format(
-                "{\"email\":\"loadtest%d@test.com\",\"password\":\"Loadtest1!\",\"name\":\"부하테스트%d\",\"departmentId\":1,\"grade\":1}",
+                "{\"email\":\"loadtest%d@test.com\",\"password\":\"Loadtest1!\",\"role\":\"STUDENT\",\"name\":\"부하테스트%d\",\"departmentId\":1,\"grade\":1}",
                 i, i
             );
             try {
