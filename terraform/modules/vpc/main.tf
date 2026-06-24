@@ -3,7 +3,8 @@ data "aws_availability_zones" "available" {
 }
 
 locals {
-  azs = slice(data.aws_availability_zones.available.names, 0, 3)
+  azs     = slice(data.aws_availability_zones.available.names, 0, 3)
+  az_count = length(local.azs)
 }
 
 resource "aws_vpc" "this" {
@@ -16,7 +17,7 @@ resource "aws_vpc" "this" {
 
 # 퍼블릭 서브넷 — ALB, NAT Gateway 배치
 resource "aws_subnet" "public" {
-  count = 3
+  count = local.az_count
 
   vpc_id                  = aws_vpc.this.id
   cidr_block              = "10.0.${count.index + 1}.0/24"
@@ -31,7 +32,7 @@ resource "aws_subnet" "public" {
 
 # 프라이빗 서브넷 — EKS 노드, RDS, ElastiCache, MSK 배치
 resource "aws_subnet" "private" {
-  count = 3
+  count = local.az_count
 
   vpc_id            = aws_vpc.this.id
   cidr_block        = "10.0.${count.index + 11}.0/24"
@@ -88,14 +89,14 @@ resource "aws_route_table" "private" {
 }
 
 resource "aws_route_table_association" "public" {
-  count = 3
+  count = local.az_count
 
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
 resource "aws_route_table_association" "private" {
-  count = 3
+  count = local.az_count
 
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private.id

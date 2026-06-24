@@ -10,14 +10,6 @@ resource "aws_security_group" "this" {
     security_groups = [var.eks_sg_id]
   }
 
-  # EKS 노드에서 Kafka 접근 (TLS)
-  ingress {
-    from_port       = 9094
-    to_port         = 9094
-    protocol        = "tcp"
-    security_groups = [var.eks_sg_id]
-  }
-
   # 브로커 간 내부 통신
   ingress {
     from_port = 0
