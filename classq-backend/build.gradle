@@ -54,4 +54,5 @@ configurations {
 dependencies {
 	gatlingImplementation 'com.mysql:mysql-connector-j:8.4.0'
 	gatlingImplementation 'redis.clients:jedis:5.2.0'
+	gatlingImplementation 'org.mindrot:jbcrypt:0.4'
 }
