@@ -33,7 +33,8 @@ public class EnrollmentConsumer {
     @KafkaListener(
             topics = "enrollment-events",
             groupId = "enrollment-processor",
-            containerFactory = "enrollmentListenerContainerFactory"
+            containerFactory = "enrollmentListenerContainerFactory",
+            concurrency = "3"
     )
 
     /*
