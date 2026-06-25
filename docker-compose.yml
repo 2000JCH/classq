@@ -60,6 +60,32 @@ services:
     volumes:
       - redis-data:/data
 
+  app:
+    build:
+      context: ./classq-backend
+      target: dev
+    container_name: app
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mysql
+      - redis
+      - kafka
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/classq?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      DB_USERNAME: root
+      DB_PASSWORD: root1234
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      BCRYPT_STRENGTH: 8
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4g
+    restart: on-failure
+
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: prometheus
