@@ -37,6 +37,10 @@ spring:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
+security:
+  bcrypt:
+    strength: ${BCRYPT_STRENGTH:10}
+
 jwt:
   secret: ${JWT_SECRET:local-dev-secret-key-for-classq-do-not-use-in-production}
   access-token-expiration: ${JWT_ACCESS_EXPIRATION:1800000}

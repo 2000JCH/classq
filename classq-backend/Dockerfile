@@ -4,9 +4,11 @@ WORKDIR /app
 EXPOSE 8080
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
-    apt-get install -y tzdata && \
+    apt-get install -y --no-install-recommends tzdata && \
     ln -sf /usr/share/zoneinfo/Asia/Seoul /etc/localtime && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+USER appuser
 
 # 2. 빌드 환경
 FROM eclipse-temurin:21-jdk AS builder

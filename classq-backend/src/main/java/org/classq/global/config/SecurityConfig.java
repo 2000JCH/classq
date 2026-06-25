@@ -3,6 +3,7 @@ package org.classq.global.config;
 import lombok.RequiredArgsConstructor;
 import org.classq.global.auth.jwt.JwtFilter;
 import org.classq.global.auth.jwt.JwtUtil;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -26,9 +27,12 @@ public class SecurityConfig {
 
     private final JwtUtil jwtUtil;
 
+    @Value("${security.bcrypt.strength}")
+    private int bcryptStrength;
+
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(8);
+        return new BCryptPasswordEncoder(bcryptStrength);
     }
 
     @Bean
