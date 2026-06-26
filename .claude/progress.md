@@ -285,14 +285,31 @@
 > After 3 핵심: ZSET 제거 + Kafka 단일 파티션으로 순서 보장 이관. After 2 대비 P95 -25%, 처리량 +28%.
 > 에러 원인 변천: DB 데드락(Before) → cancel() 데드락 심화(After 1) → 데드락 구조 제거(After 2) → 응답시간 추가 개선(After 3)
 
+**시나리오 3 — 스트레스 테스트 (StressTestSimulation, 5,100명 점진적 주입, c6i.large 기준)**
+
+| 항목 | ① cost10 + show_sql on | ② cost10 + show_sql off | ③ cost8 + show_sql off | ④ cost8 + show_sql on |
+|---|---|---|---|---|
+| P95 | 49,010ms | 46,021ms | **21ms** | 49ms |
+| 처리량 | 93.85 req/s | 95.06 req/s | **175.86 req/s** | 175.86 req/s |
+| KO | 9 | 0 | **0** | 0 |
+
+> 핵심 병목: BCrypt cost10. cost8 채택 후 P95 49,010ms → 21ms (-99.95%), 처리량 +87%.
+> 적용 최적화: BCrypt cost 10→8 / HikariCP 10→20 / Kafka concurrency 1→3
+
 **개선 포인트 후보** (AWS에서 측정 후 채워나가기)
-- HikariCP 커넥션 풀 튜닝 → 처리량 변화
 - 인덱스 추가 → 슬로우 쿼리 개선
-- Kafka Consumer 병렬 처리 확장 (enrollment-events 3파티션 활용)
 
 ---
 
 ## Phase 12. AWS 배포
+
+### 인프라 코드
+- [x] AWS 스펙 분석 문서 작성 (`.claude/docs/aws-spec.md`) — EC2 계열 특성, 컴포넌트별 권장 스펙, 성능 예측, SLO 정의
+- [x] Terraform 코드 작성 (`terraform/`) — 모듈 분리 구조 (VPC, EKS, RDS, ElastiCache, MSK, ECR)
+  - EKS: `c6i.xlarge` (4 vCPU / 8 GiB)
+  - RDS: `db.r5.large` (InnoDB 버퍼 풀 75%)
+  - ElastiCache: `cache.r6g.large` (AOF enabled)
+  - MSK: `kafka.m5.large` × 3 브로커
 
 ### 배포 전 필수 수정 항목
 - [ ] `DataInitializer` 관리자 비밀번호 하드코딩 제거 → 환경변수(`ADMIN_PASSWORD`)로 변경

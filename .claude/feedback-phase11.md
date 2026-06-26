@@ -45,10 +45,10 @@
   - 코드래빗 리뷰 반영: stale ZSET head 루프 수정(CourseService, EnrollmentCancelConsumer, WaitlistService), 승격 시 lock TTL 재설정
 - [x] **[완료]** 노션 부하 테스트 페이지 — After 2 (Sorted Set) 결과 업데이트 (2026-06-21)
 - [ ] Gatling 시나리오 추가 — 알림 수락 플로우 (NotificationAcceptSimulation) → 보류
-- [ ] 노션 부하 테스트 페이지 — AWS 인스턴스 스펙별 성능 예측 표 추가 (t3.small → c4.xlarge 등)
-- [ ] 노션 부하 테스트 페이지 — t/c/r 계열 특성 + ClassQ 권장 스펙 정리
-- [ ] 목표 SLO 정의 후 문서 반영 (ex. 300명 P95 < 1s)
-- [ ] Terraform으로 AWS 인프라 코드 작성 (EC2, RDS, ElastiCache, MSK 등)
+- [x] 노션 부하 테스트 페이지 — AWS 인스턴스 스펙별 성능 예측 표 추가 (2026-06-23 완료, 별도 'AWS 인프라 설계' 노션 페이지로 작성)
+- [x] 노션 부하 테스트 페이지 — t/c/r 계열 특성 + ClassQ 권장 스펙 정리 (2026-06-23 완료, `.claude/docs/aws-spec.md` A~C섹션)
+- [x] 목표 SLO 정의 후 문서 반영 (2026-06-23 완료, `.claude/docs/aws-spec.md` E섹션 — 수강신청 P95 < 1000ms, 에러율 < 0.1%, 처리량 > 250 req/s)
+- [x] Terraform으로 AWS 인프라 코드 작성 (2026-06-23 완료, `terraform/` 모듈 분리 구조 — VPC, EKS, RDS, ElastiCache, MSK, ECR)
 
 ---
 

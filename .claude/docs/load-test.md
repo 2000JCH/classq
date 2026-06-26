@@ -168,3 +168,60 @@
 - Kafka 단일 파티션이 순서 보장을 담당 → Redis는 슬롯 카운터(`waitlist:course:{id}`) 역할만 수행
 - 프로모션 로직이 Consumer로 완전히 분리되어 동기 경로 단순화
 - 에러율 0%, HikariCP max 1 커넥션 유지
+
+---
+
+## 시나리오 3 — 스트레스 테스트 (StressTestSimulation)
+
+### 테스트 환경
+
+- **실행 도구**: Gatling 3.11.5 (Gradle 플러그인)
+- **대상 서버**: 로컬 (Docker Compose)
+- **서버 스펙**: c6i.large 기준 (CPU 2 / Memory 4GB)
+- **스펙 선정 이유**: c6i.large는 Spring Boot + Kafka Consumer + Redis 클라이언트를 동시에 구동할 수 있는 최소 사양. 최솟값 제약 환경에서 Breaking point를 찾는 것이 목적이므로 해당 스펙을 기준으로 측정.
+
+### 플로우
+
+```
+로그인 → 강의목록조회 → 수강신청 → 3초 대기 → 내 수강신청 조회 → 취소 → 수강 변경
+```
+
+### 주입 전략
+
+`incrementUsersPerSec`: 10/s → 20/s → 30/s → 40/s → 50/s (각 30초 유지, 5초 램프업)
+총 주입 인원 약 **5,100명** (USER_COUNT = 5,500, 버퍼 포함)
+
+### 최적화 항목 (2026-06-24)
+
+- Kafka Consumer concurrency: 1 → 3 (파티션 3개와 스레드 수 일치)
+- HikariCP maximum-pool-size: 10 → 20
+- BCrypt cost: 10 → 8
+
+### 2x2 측정 비교 (BCrypt cost × show_sql)
+
+| 항목 | ① cost10 + show_sql on | ② cost10 + show_sql off | ③ cost8 + show_sql off | ④ cost8 + show_sql on |
+|---|---|---|---|---|
+| KO | 9 | **0** | **0** | **0** |
+| P95 | 49,010ms | 46,021ms | **21ms** | **49ms** |
+| P99 | 54,848ms | 51,073ms | 71ms | 94ms |
+| Mean | 13,936ms | 13,236ms | 9ms | 12ms |
+| Max | 60,016ms | 57,845ms | 557ms | 447ms |
+| 처리량 | 93.85 req/s | 95.06 req/s | **175.86 req/s** | **175.86 req/s** |
+
+> ①②는 Kafka concurrency=3, HikariCP=20 적용 후 측정한 값. ①②가 ③④보다 나쁜 이유는 BCrypt cost10이 주 병목이었기 때문.
+> ② 초기 측정(KO 476건)은 이상값으로 재측정 후 교체.
+
+### Before → After 최종 비교
+
+| 지표 | Before (① cost10 + show_sql on) | After (③ cost8 + show_sql off) | 개선율 |
+|---|---|---|---|
+| P95 | 49,010ms | **21ms** | **-99.95%** |
+| P99 | 54,848ms | 71ms | — |
+| KO | 9 | **0** | — |
+| 처리량 | 93.85 req/s | **175.86 req/s** | **+87%** |
+
+### 결론
+
+- **핵심 병목은 BCrypt cost10**: cost 8로 낮추는 것만으로 P95 ~49,000ms → 21ms 달성
+- **show_sql 영향은 부가적**: off(21ms) vs on(49ms) — 2.3배 차이지만 둘 다 서비스 가능 수준
+- show_sql이 기존에 큰 병목처럼 보인 이유: cost10으로 로그인이 느려진 상태에서 SQL 로그 I/O가 누적되어 함께 폭발한 것. cost8 환경에서는 영향 미미
