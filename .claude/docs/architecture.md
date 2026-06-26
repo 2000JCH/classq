@@ -10,10 +10,11 @@
 
 | 구성 요소 | AWS 서비스 | 역할 |
 |---|---|---|
-| 컨테이너 오케스트레이션 | EKS | Spring Boot, Kafka, Debezium 컨테이너 배포 및 관리 |
+| 컨테이너 오케스트레이션 | EKS | Spring Boot, Debezium(Kafka Connect) 컨테이너 배포 및 관리 |
 | 컨테이너 이미지 저장소 | ECR | Docker 이미지 저장 및 버전 관리 |
 | 데이터베이스 | RDS (MySQL) | 영구 데이터 저장 |
 | 캐시 | ElastiCache (Redis) | 잔여 자리, 시간표, 학점, 잠금, 토큰 관리 |
+| 메시지 브로커 | MSK (Kafka) | 수강신청/취소/대기자 이벤트 비동기 처리 (kafka.m5.large × 3 브로커) |
 | 인프라 로그/알림 | CloudWatch | EKS 인프라 로그, RDS 슬로우 쿼리 수집 |
 | CI/CD | GitHub Actions + ECR | 코드 푸시 시 자동 빌드 및 EKS 배포 |
 
