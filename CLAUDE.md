@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 아키텍처
 
-ClassQ는 대학교 수강신청 시스템이다. 핵심 설계 목표는 수강신청 폭주 구간에서 RDS 부하를 제거하는 것이다. 학생이 응답을 기다리는 동기 구간은 Redis만 사용하고, RDS 쓰기는 Kafka Consumer를 통해 비동기로 처리한다.
+ClassQ는 대학교 수강신청 시스템이다. 핵심 설계 목표는 수강신청 폭주 구간에서 RDS 부하를 제거하는 것이다. 학생이 응답을 기다리는 동기 구간은 RDS를 사용하지 않고 Redis 연산과 Kafka 발행 확인만 수행하며, RDS 쓰기는 Kafka Consumer를 통해 비동기로 처리한다.
 
 ### 패키지 구조
 
@@ -76,12 +76,12 @@ org.classq
 
 ### 수강신청 핵심 플로우
 
-**동기 구간 (Redis만 사용, 학생이 응답 대기):**
+**동기 구간 (RDS 미사용 — Redis 연산 + Kafka 발행 확인, 학생이 응답 대기):**
 1. `lock:course:{id}` 확인 → 잠금 있으면 거절
 2. `schedule:student:{id}` 시간표 중복 체크 (캐시 없으면 RDS 조회 후 저장)
 3. `credits:student:{id}` 19학점 초과 체크 (캐시 없으면 RDS 조회 후 저장)
 4. `DECR enrollment:course:{id}` → 음수면 `INCR` 롤백 후 거절
-5. Kafka `enrollment-events` 발행 (acks=all)
+5. Kafka `enrollment-events` 발행 (acks=all) → `.get(5, TimeUnit.SECONDS)`로 동기 확인, 실패 시 `INCR` 롤백 후 거절
 6. 성공 응답 반환
 
 **비동기 구간 (Kafka Consumer):**
