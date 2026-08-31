@@ -145,6 +145,7 @@
 - `WaitlistPromoteConsumer` (신규): 단일 파티션 소비 → DB `ORDER BY rank ASC`로 첫 번째 WAITING 조회 → NOTIFIED 전환 + SSE 알림
 - `EnrollmentCancelConsumer`: ZSET range 조회 → DB `findFirstByCourse_IdAndWaitlistStatusAndDeletedAtIsNullOrderByRankAsc`로 교체
 - rank 값은 DB에 그대로 보존, `getMyWaitlists()` 조회 시 `w.getRank()` 직접 반환
+- `CourseService.updateCourse()`(교수의 정원 증가)도 동일하게 `waitlist-promote-events` 발행으로 통일 — 취소 경로만 Kafka로 옮기고 정원증가 경로는 동기 처리로 남아있던 불일치를 제거함 (자리 발생 경로 3가지: 취소 / 만료·거절·수락실패 / 정원증가 모두 동일한 Kafka 단일 파티션으로 수렴)
 
 | 항목 | Before (DB) | After 1 (Redis) | After 2 (ZSET) | After 3 (Kafka) |
 |---|---|---|---|---|
@@ -213,12 +214,15 @@
 
 ### Before → After 최종 비교
 
-| 지표 | Before (① cost10 + show_sql on) | After (③ cost8 + show_sql off) | 개선율 |
+대표 수치는 **아무 튜닝도 하기 전인 최초 측정**(위 "측정 결과 (5,100명, 최초 측정)" 표: P95 44,238ms, 97 req/s) 기준이다. 2×2 매트릭스의 ①(cost10+show_sql on, 49,010ms)은 Kafka concurrency/HikariCP 튜닝을 이미 적용한 뒤 cost10만 재현 측정한 값이라 최초 측정치와 시점이 다르므로 헤드라인 비교에는 쓰지 않는다.
+
+| 지표 | Before (최초 측정, 튜닝 전) | After (③ cost8 + show_sql off) | 개선율 |
 |---|---|---|---|
-| P95 | 49,010ms | **21ms** | **-99.95%** |
-| P99 | 54,848ms | 71ms | — |
-| KO | 9 | **0** | — |
-| 처리량 | 93.85 req/s | **175.86 req/s** | **+87%** |
+| P95 | 44,238ms | **21ms** | **-99.95%** |
+| KO | 0 | **0** | — |
+| 처리량 | 97 req/s | **175.86 req/s** | **+81%** |
+
+> cost·show_sql만 격리한 별도 비교(HikariCP=20, concurrency=3 고정 상태에서 cost10→8만 변경)는 46,021ms→21ms(-99.95%), 95.06→175.86 req/s(+85%)로 이력서/포트폴리오와는 별개의 수치다. 핵심 병목이 BCrypt cost10 단독이라는 결론은 두 비교 모두 동일하게 뒷받침한다.
 
 ### 결론
 

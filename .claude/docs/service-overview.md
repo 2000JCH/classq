@@ -22,7 +22,7 @@
 
 ### 강의
 
-강의는 course_type(MAJOR_REQUIRED / MAJOR_ELECTIVE / LIBERAL_ARTS), class_type(THEORY / PRACTICE), class_mode(ONLINE / OFFLINE)로 구분된다. 학점은 교수가 강의 등록 시 1 / 2 / 3 중 선택한다. 전공 강의는 학과 제한(department_id 필수)과 학년 제한(min_grade / max_grade)이 있으며, 교양 강의는 학과 및 학년 제한이 없다(department_id = NULL, min_grade = NULL, max_grade = NULL). 강의 정보는 변경 빈도가 낮으므로 Redis 캐싱 없이 RDS에서 직접 조회한다.
+강의는 course_type(MAJOR_REQUIRED / MAJOR_ELECTIVE / LIBERAL_ARTS), class_type(THEORY / PRACTICE), class_mode(ONLINE / OFFLINE)로 구분된다. 학점은 교수가 강의 등록 시 1 / 2 / 3 중 선택한다. 전공 강의는 학과 제한(department_id 필수)과 학년 제한(min_grade / max_grade)이 있으며, 교양 강의는 학과 및 학년 제한이 없다(department_id = NULL, min_grade = NULL, max_grade = NULL). 강의 목록/상세 조회는 RDS를 직접 조회하지만, 학점·이름·시간표(`course:{id}:credits/name/schedules`)는 강의 등록 시점에 Redis로도 캐싱해두어 수강신청 동기 구간에서 RDS 없이 즉시 읽을 수 있게 한다.
 
 ### 수강신청
 
@@ -40,7 +40,7 @@
 
 ## Redis 캐싱 전략
 
-Redis는 수강신청 동기 구간에서 RDS 부하를 제거하기 위해 사용한다. 잔여 수강 자리(enrollment:course:{id})는 강의 등록 시 정원으로 초기화하며, key가 없을 때 RDS에서 자동 복구한다. 잔여 대기 자리(waitlist:course:{id})는 강의 등록 시 waitlist_limit으로 초기화한다. 학생 시간표(schedule:student:{id})와 총 학점(credits:student:{id})은 첫 수강신청 시 RDS에서 조회 후 저장하며 이후 수강신청/취소 시 즉시 갱신한다. 잠금(lock:course:{id})은 TTL 없이 세팅하며 Scheduler가 직접 관리한다. Redis AOF 설정을 활성화하여 장애 시 디스크에서 데이터를 복원할 수 있도록 한다.
+Redis는 수강신청 동기 구간에서 RDS 부하를 제거하기 위해 사용한다. 잔여 수강 자리(enrollment:course:{id})는 강의 등록 시 정원으로 초기화하며, key가 없을 때 RDS에서 자동 복구한다. 잔여 대기 자리(waitlist:course:{id})는 강의 등록 시 waitlist_limit으로 초기화한다. 강의 학점·이름·시간표(course:{id}:credits/name/schedules)와 학생 계정→ID 매핑(student:account:{accountId})은 강의 등록/로그인 시점에 채워두며 자동 복구 로직이 없다. 학생 시간표(schedule:student:{id})와 총 학점(credits:student:{id})은 첫 수강신청 시 RDS에서 조회 후 저장하며 이후 수강신청/취소 시 즉시 갱신한다. 잠금(lock:course:{id})은 기본적으로 Scheduler/Consumer가 직접 DEL로 해제하되, 장애 시 자동 해제를 위한 15분 TTL을 안전망으로 함께 건다. Redis AOF 설정을 활성화하여 장애 시 디스크에서 데이터를 복원할 수 있도록 한다.
 
 ---
 
@@ -48,7 +48,7 @@ Redis는 수강신청 동기 구간에서 RDS 부하를 제거하기 위해 사�
 
 ### 인프라
 
-EKS를 사용하여 Spring Boot, Kafka, Debezium 컨테이너를 배포 및 관리한다. ECR에 Docker 이미지를 저장하고 버전을 관리한다. RDS(MySQL)를 영구 데이터 저장소로 사용한다.
+Terraform으로 EKS/ECR/RDS/ElastiCache/MSK 등 AWS 인프라를 코드로 작성해두었다 — 아직 실제 배포 전(IaC 작성 경험 단계)이며, 로컬 개발/부하테스트는 Docker Compose로 동일 스펙을 시뮬레이션한다. 배포 시 EKS가 Spring Boot·Kafka·Debezium 컨테이너를 관리하고, ECR이 Docker 이미지를, RDS(MySQL)가 영구 데이터 저장을 담당하는 구조로 설계되어 있다.
 
 ### 캐시
 
@@ -62,7 +62,7 @@ Kafka를 수강신청/취소 이벤트의 비동기 처리 브로커로 사용�
 
 ### 보안
 
-JWT 인증을 사용하며 role 컬럼(STUDENT / PROFESSOR / ADMIN)으로 권한을 구분한다.
+JWT 인증을 사용하며 role 클레임(STUDENT / PROFESSOR / ADMIN)으로 권한을 구분한다. `SecurityConfig`가 경로별로 `hasRole()`을 걸어 역할별 접근을 필터 체인 단계에서 강제한다(예: 강의 생성/수정/폐강은 PROFESSOR만, 수강신청/대기자는 STUDENT만).
 
 ### 모니터링
 

@@ -23,7 +23,7 @@ Redis로 잔여 자리를 빠르게 확보하고, Kafka로 후속 DB 처리를 �
 | Message Broker | Apache Kafka |
 | CDC | Debezium |
 | Security | Spring Security + JWT |
-| Infra | AWS EKS, ECR, RDS, Terraform |
+| Infra | AWS EKS, ECR, RDS, Terraform (IaC 작성 완료, 실배포 전) |
 | Monitoring | Prometheus + CloudWatch + Grafana |
 | Load Testing | Gatling |
 | CI/CD | GitHub Actions + ECR |
@@ -35,11 +35,12 @@ Redis로 잔여 자리를 빠르게 확보하고, Kafka로 후속 DB 처리를 �
 수강신청 요청은 동기 구간과 비동기 구간으로 분리된다.
 
 **동기 구간** — 학생이 응답을 기다리는 구간으로 RDS 조회 없이 Redis만 사용한다.
-1. 잠금 확인 (lock:course:{id})
-2. 시간표 중복 체크 (schedule:student:{id})
-3. 학점 초과 체크 (credits:student:{id})
-4. 잔여 자리 차감 (DECR enrollment:course:{id})
-5. Kafka 이벤트 발행 후 즉시 응답
+1. studentId·강의 학점 조회 (student:account:{id}, course:{id}:credits)
+2. 잠금 확인 (lock:course:{id})
+3. 시간표 중복 체크 (course:{id}:schedules ↔ schedule:student:{id})
+4. 학점 초과 체크 (credits:student:{id})
+5. 잔여 자리 차감 (DECR enrollment:course:{id})
+6. Kafka 이벤트 발행(acks=all, 동기 확인) 후 즉시 응답
 
 **비동기 구간** — Kafka Consumer가 RDS INSERT 및 Redis 캐시 갱신을 처리한다.
 
@@ -71,13 +72,14 @@ org.classq
 > 테이블: account, student, professor, department, course, course_schedule, enrollment, waitlist, notification (총 9개)
 
 ```
-account ──── student ──── enrollment ──── course ──── course_schedule
-               │               │                │
-               └── professor   └── waitlist     └── department
+account ──1:1── student ──── department
+account ──1:1── professor ──── department
 
-student    ──── department
-professor  ──── department
-course     ──── department
+professor ──1:N── course ──── department
+course ──1:N── course_schedule
+
+student ──N:M── course (via enrollment)
+student ──N:M── course (via waitlist)
 
 notification → student
 notification → course
@@ -91,9 +93,11 @@ notification → course
 |---|---|---|
 | `enrollment:course:{id}` | 잔여 수강 자리 | 없음 |
 | `waitlist:course:{id}` | 잔여 대기 자리 | 없음 |
-| `lock:course:{id}` | 대기자 처리 중 잠금 | 없음 |
+| `lock:course:{id}` | 대기자 처리 중 잠금 | 15분 (안전망) |
 | `schedule:student:{id}` | 학생 시간표 캐시 | 없음 |
 | `credits:student:{id}` | 학생 총 학점 캐시 | 없음 |
+| `course:{id}:credits` / `:name` / `:schedules` | 강의 학점·이름·시간표 캐시 | 없음 |
+| `student:account:{accountId}` | accountId → studentId 매핑 | 없음 |
 | `refresh:token:{accountId}` | Refresh Token | 7일 |
 
 ---
@@ -179,15 +183,15 @@ Docker 및 백엔드 서버 실행 후 아래 명령어로 실행한다.
 
 > 에러 원인 변천: DB 데드락 → cancel() 데드락 심화 → Redis Sorted Set 도입으로 데드락 구조 제거 → Kafka 단일 파티션으로 순서 보장 이관.
 
-### 시나리오 3 — 스트레스 테스트 (5,100명 점진적 주입, c6i.large 기준)
+### 시나리오 3 — 스트레스 테스트 (5,100명 점진적 주입, c6i.large 기준, 계정 풀은 5,500개 사전 생성)
 
-| 항목 | Before (BCrypt cost 10) | After (BCrypt cost 8 + 최적화) |
+| 항목 | Before (튜닝 전 최초 측정) | After (BCrypt cost 8 + 최적화) |
 |---|---|---|
-| P95 | 49,010ms | **21ms** |
-| 처리량 | 93.85 req/s | **175.86 req/s** |
-| 에러 | 9건 | 0건 |
+| P95 | 44,238ms | **21ms** |
+| 처리량 | 97 req/s | **175.86 req/s** |
+| 에러 | 0건 | 0건 |
 
-> 핵심 병목: BCrypt cost 10. cost 8 채택 후 P95 49초 → 21ms (-99.95%), 처리량 +87%.  
+> 핵심 병목: BCrypt cost 10. cost 8 채택 후 P95 44.2초 → 21ms (-99.95%), 처리량 +81%.  
 > 적용 최적화: BCrypt cost 10→8 / HikariCP 10→20 / Kafka Consumer concurrency 1→3
 
 ---
@@ -218,5 +222,8 @@ Docker 및 백엔드 서버 실행 후 아래 명령어로 실행한다.
 | [api-design.md](./.claude/docs/api-design.md) | API 명세 |
 | [redis-design.md](./.claude/docs/redis-design.md) | Redis Key 설계 |
 | [frontend-design.md](./.claude/docs/frontend-design.md) | 프론트엔드 설계 |
+| [jwt.md](./.claude/docs/jwt.md) | JWT 인증 설계 |
+| [service-overview.md](./.claude/docs/service-overview.md) | 서비스 개요, 도메인 규칙 |
+| [aws-spec.md](./.claude/docs/aws-spec.md) | AWS 인프라 스펙(Terraform, 실배포 전) |
 | [test-data.md](./.claude/docs/test-data.md) | 로컬 테스트 계정 및 Gatling 부하 테스트 계정 |
 | [load-test.md](./.claude/docs/load-test.md) | Gatling 부하 테스트 시나리오별 측정 결과, Before/After 비교 |

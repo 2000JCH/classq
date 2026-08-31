@@ -20,8 +20,9 @@ Base URL은 `/api/v1`로 통일한다. 모든 인증이 필요한 요청은 `Aut
 **로그인 성공 응답**
 ```
 Response Body: { "accessToken": "eyJhbGci..." }
-Set-Cookie: refreshToken=eyJhbGci...; HttpOnly; Path=/api/v1/auth/refresh; SameSite=Strict; Max-Age=604800
+Set-Cookie: refreshToken=eyJhbGci...; HttpOnly; Secure; Path=/api/v1/auth; SameSite=Strict; Max-Age=604800
 ```
+Path을 `/api/v1/auth`(전체)로 잡은 이유는 refresh 요청 외에 signup/login/logout 등 인증 관련 요청 전반에서 쿠키가 필요할 수 있기 때문이며, `/api/v1` 전역이 아니라 `/api/v1/auth`로 좁혀 불필요한 API에 쿠키가 실리지 않도록 한다.
 
 **access token 재발급**
 - 요청 시 별도 헤더 불필요 — 브라우저가 쿠키를 자동으로 전송
@@ -58,7 +59,7 @@ Set-Cookie: refreshToken=eyJhbGci...; HttpOnly; Path=/api/v1/auth/refresh; SameS
 
 | 메서드 | 엔드포인트 | 설명 | 권한 |
 |---|---|---|---|
-| GET | /api/v1/departments | 전체 학과 목록 조회 | 인증 필요 |
+| GET | /api/v1/departments | 전체 학과 목록 조회 | 없음 |
 
 ---
 
@@ -104,7 +105,7 @@ Set-Cookie: refreshToken=eyJhbGci...; HttpOnly; Path=/api/v1/auth/refresh; SameS
 **강의 수정 시 부가 동작**
 - 정원 변경 시: Redis `enrollment:course:{id}` 즉시 증감
 - 대기 정원 변경 시: Redis `waitlist:course:{id}` 즉시 증감
-- 정원 증가 시 NOTIFIED 대기자가 없으면: 1순위 WAITING 대기자에게 SSE 알림 발송 + `lock:course:{id}` SET
+- 정원 증가 시: DB 커밋 후 `waitlist-promote-events` Kafka 발행 → `WaitlistPromoteConsumer`가 NOTIFIED 대기자 유무 확인 후 1순위 WAITING 대기자에게 SSE 알림 + `lock:course:{id}` SET (취소 시 프로모션과 동일 로직, Kafka 단일 파티션으로 순서 보장)
 
 ---
 
@@ -142,23 +143,9 @@ Set-Cookie: refreshToken=eyJhbGci...; HttpOnly; Path=/api/v1/auth/refresh; SameS
 
 - `courseType`: `MAJOR_REQUIRED` / `MAJOR_ELECTIVE` / `LIBERAL_ARTS` — 프론트엔드 전공/교양 학점 분류에 사용
 
-**수강신청 성공 응답**
-```json
-{
-  "status": "SUCCESS",
-  "message": "신청 완료",
-  "courseId": 101,
-  "courseName": "자바프로그래밍"
-}
-```
-
-**수강신청 실패 응답**
-```json
-{
-  "status": "FAIL",
-  "message": "마감됨 | 학점 초과 | 시간 중복 | 대기자 처리 중"
-}
-```
+**수강신청/취소 성공·실패 응답**
+- 신청 성공: `201 Created`, 바디 없음 / 취소 성공: `204 No Content`, 바디 없음
+- 실패: 하단 "에러 응답 형식"(`{code, message}`) 참고 — 별도의 SUCCESS/FAIL 바디 포맷은 사용하지 않는다
 
 ---
 
@@ -258,9 +245,9 @@ data: {"type":"WAITLIST_AVAILABLE","notificationId":1,"message":"대기 수락 �
 | 코드 | HTTP | 설명 |
 |---|---|---|
 | EMAIL_ALREADY_EXISTS | 409 | 이미 존재하는 이메일로 회원가입 시도 |
-| INVALID_TOKEN | 401 | 위변조·형식 오류·잘못된 타입의 토큰 |
-| TOKEN_EXPIRED | 401 | 만료된 토큰 (enum 정의됨, 현재 INVALID_TOKEN으로 통합 처리) |
-| UNAUTHORIZED | 401 | Redis 토큰 불일치, 계정 미존재 등 인증 실패 |
+| INVALID_TOKEN | 401 | `/auth/refresh` 요청 시 refresh token이 위변조·형식오류·잘못된 타입인 경우 (`AccountService.refresh`) |
+| TOKEN_EXPIRED | 401 | 만료된 access token으로 요청 시. `JwtFilter`가 만료를 감지해 요청 속성에 표시하면 `AuthenticationEntryPoint`가 이 코드로 응답 (무효 토큰과 구분됨) |
+| UNAUTHORIZED | 401 | access token 없음·서명 무효 등 필터 체인의 그 외 인증 실패, Redis 토큰 불일치 등 |
 | LOGIN_FAILED | 401 | 이메일 또는 비밀번호 불일치 |
 | ACCOUNT_PENDING | 403 | 교수 회원가입 후 관리자 승인 대기 중 로그인 시도 |
 | FORBIDDEN | 403 | 권한 없는 접근 |
@@ -274,6 +261,9 @@ data: {"type":"WAITLIST_AVAILABLE","notificationId":1,"message":"대기 수락 �
 | ENROLLMENT_CLOSED | 409 | 수강 자리 마감 |
 | WAITLIST_CLOSED | 409 | 대기 자리 마감 |
 | DUPLICATE_ENROLLMENT | 409 | 이미 신청한 강의 |
+| DUPLICATE_WAITLIST | 409 | 이미 대기 신청한 강의 |
+| WAITLIST_INVALID_STATUS | 409 | 취소/수락/거절할 수 없는 대기 상태(WAITING/NOTIFIED가 아님) |
+| WAITLIST_EXPIRED | 409 | 대기 수락 가능 시간(10분) 만료 |
 | INVALID_INPUT | 400 | 요청 입력값 유효성 검증 실패 |
 | CREDIT_EXCEEDED | 400 | 학점 초과 |
 | TIME_CONFLICT | 400 | 시간표 중복 |

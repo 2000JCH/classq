@@ -43,12 +43,24 @@
 
 ## Gatling 부하 테스트 계정 (자동 생성)
 
-`./gradlew gatlingRun` 실행 시 `before()` 블록이 자동 생성한다. 직접 만들 필요 없음.
+`./gradlew gatlingRun` 실행 시 `before()` 블록이 자동 생성한다. 직접 만들 필요 없음. 계정 생성 방식은 시나리오별로 다르다.
+
+### EnrollmentFlowSimulation / WaitlistFlowSimulation — HTTP 회원가입
 
 | 패턴 | 비밀번호 | 개수 |
 |---|---|---|
 | `loadtest{n}@test.com` (n = 1~300) | `Loadtest1!` | 300명 |
 
 > - 이름: `부하테스트{n}`, 학과: 컴퓨터공학과(departmentId=1), 학년: 1
-> - 이미 존재하면 409 → 무시하고 통과 (재실행 시 멱등)
+> - 실제 `/api/v1/auth/signup` API를 호출해 계정 생성 (이미 존재하면 409 → 무시하고 통과, 재실행 시 멱등)
 > - 부하 테스트 대상 강의: course_id=3 (UI/UX, 정원 30명)
+
+### StressTestSimulation — JDBC 배치 INSERT (HTTP 회원가입 아님)
+
+| 패턴 | 비밀번호 | 개수(USER_COUNT) |
+|---|---|---|
+| `loadtest{n}@test.com` (n = 1~5,500) | `Loadtest1!` | 5,500명 (실제 주입은 약 5,100명, 버퍼 포함) |
+
+> - 5,500명을 HTTP signup으로 만들면 BCrypt 해싱 비용 자체가 셋업 시간을 지배하므로, `account`/`student` 테이블에 JDBC로 직접 batch INSERT한다 (`INSERT IGNORE INTO account ...`, `student`는 email로 account_id 서브쿼리 조회 후 INSERT)
+> - 비밀번호는 `BCrypt.hashpw("Loadtest1!", BCrypt.gensalt(8))`로 **1회만** 해싱해서 5,500개 계정 전부에 동일 해시를 적용 (매 계정 해싱 시 5,500 × 200ms 이상 소요되는 걸 피하기 위함)
+> - DB 접속 정보는 `GATLING_DB_URL` 환경변수로 오버라이드 가능 (기본값 `localhost:3306`)
