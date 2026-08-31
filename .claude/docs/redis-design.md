@@ -56,12 +56,12 @@ TTL을 두지 않는 이유는 enrollment:course:{id}와 동일하다. 대기 �
 
 ```
 key:   lock:course:{courseId}
-value: "LOCKED" (String)
-TTL:   없음 (Scheduler가 직접 관리)
-예시:  lock:course:101 = "LOCKED"
+value: "1" (String)
+TTL:   15분 (안전망)
+예시:  lock:course:101 = "1"
 ```
 
-TTL을 두지 않는 이유는 대기자 처리 완료 시점이 일정하지 않기 때문이다. TTL로 잠금이 자동 해제되면 대기자 처리 도중 다른 학생이 자리를 가져가는 경쟁 상태가 발생한다. Scheduler가 대기자 처리 완료를 확인한 후 직접 DEL로 해제한다.
+기본적으로는 Scheduler/Consumer가 대기자 처리 완료 시점에 직접 DEL로 해제한다 (아래 해제 조건 참고). 다만 대기 수락 제한 시간이 10분이므로, Scheduler 장애 등으로 DEL이 누락되는 경우를 대비해 `set(..., 15, TimeUnit.MINUTES)`로 **10분(수락 제한) + 5분(처리 여유) = 15분 TTL을 안전망으로 함께 건다** (`EnrollmentCancelConsumer`, `WaitlistPromoteConsumer` 2곳에서 직접 SET — `CourseService.updateCourse`는 정원증가 시 lock을 직접 세팅하지 않고 `waitlist-promote-events` Kafka 발행만 하며, 실제 lock SET은 이를 소비하는 `WaitlistPromoteConsumer`가 담당한다).
 
 **사용 시점**
 - 수강 취소 발생 + 대기자 있을 때 SET
@@ -138,19 +138,67 @@ Refresh Token은 7일 TTL을 적용한다. 보안상 일정 기간이 지나면 
 
 ---
 
+### 7. 강의 정보 캐시 (학점 / 이름 / 시간표)
+
+```
+key:   course:{courseId}:credits
+value: 학점 (Integer)
+
+key:   course:{courseId}:name
+value: 강의명 (String)
+
+key:   course:{courseId}:schedules
+value: Set<String>, "요일|시작시간|종료시간" 형식
+TTL:   없음
+예시:  course:101:credits = 3
+       course:101:name = "자료구조"
+       course:101:schedules = {"MON|09:00|11:00", "WED|09:00|11:00"}
+```
+
+TTL을 두지 않는 이유는 수강신청 동기 구간(`EnrollmentService.enroll/cancel/enrollFromWaitlist`)에서 RDS 조회 없이 학점과 시간표를 즉시 읽어야 하기 때문이다. `course:{id}:credits`가 없으면 강의가 존재해도 `COURSE_NOT_FOUND`로 응답한다.
+
+**사용 시점**
+- 강의 등록 시 SET (`DataInitializer` 시드 데이터, `CourseService.createCourse` API 등록 둘 다)
+- 수강신청/수강취소/대기수락 시 GET(학점)·SMEMBERS(시간표) 조회 (`EnrollmentService`)
+- 대기자 등록 시 `course:{id}:name`으로 강의명 조회 (`WaitlistService.register`)
+
+**⚠️ 알려진 갭**
+- 시간표 수정 API 자체가 없고(`CourseUpdateRequestDto`에 시간표 필드 없음), Debezium도 `course` 테이블만 구독 중이라(`table.include.list=classq.course`) `course_schedule` 테이블이 바뀌어도 `course:{id}:schedules`는 갱신되지 않는다. (`course:{id}:credits`/`:name`/`:schedules` 자체가 `createCourse()`에서 안 채워지던 문제는 해결됨 — SET 누락 시 캐시 미스로 `COURSE_NOT_FOUND`가 나던 케이스였다.)
+
+---
+
+### 8. 학생 계정→ID 매핑
+
+```
+key:   student:account:{accountId}
+value: studentId (Long as String)
+TTL:   없음
+예시:  student:account:5 = 12
+```
+
+**사용 시점**
+- 로그인/회원가입 시 `setIfAbsent`로 세팅 (`AccountService.login/signup`)
+- 수강신청·취소·대기자 등록 등 accountId → studentId 변환이 필요한 모든 곳에서 GET (`EnrollmentService`, `WaitlistService`)
+
+---
+
 ## 전체 Key 요약
 
 | Key | 초기화 시점 | 갱신 시점 | TTL |
 |---|---|---|---|
 | `enrollment:course:{id}` | 강의 등록 | 수강신청/취소/정원변경 / 폐강 시 DEL | 없음 |
 | `waitlist:course:{id}` | 강의 등록 | 대기 등록/취소/만료/수락 / 폐강 시 DEL | 없음 |
-| `lock:course:{id}` | 대기자 처리 시작 | Scheduler 해제 / 폐강 시 DEL | 없음 |
+| `lock:course:{id}` | 대기자 처리 시작 | Scheduler·Consumer 해제 / 폐강 시 DEL | 15분 (안전망) |
 | `schedule:student:{id}` | 첫 수강신청 시 | 수강신청/취소 | 없음 |
 | `credits:student:{id}` | 첫 수강신청 시 | 수강신청/취소 | 없음 |
+| `course:{id}:credits` | 강의 등록(DataInitializer/API 둘 다) | 갱신 없음 | 없음 |
+| `course:{id}:name` | 강의 등록(DataInitializer/API 둘 다) | 갱신 없음 | 없음 |
+| `course:{id}:schedules` | 강의 등록(DataInitializer/API 둘 다) | 갱신 없음 (시간표 수정 API 미구현) | 없음 |
+| `student:account:{accountId}` | 로그인/회원가입 시 | 갱신 없음 (setIfAbsent) | 없음 |
 | `refresh:token:{accountId}` | 로그인 시 | 재로그인 시 덮어씌움 | 7일 |
 
 ---
 
 ## 장애 대비
 
-Redis 서버가 재시작되더라도 AOF로 전체 데이터를 복원한다. enrollment key가 없을 때는 RDS COUNT 쿼리로 자동 복구 후 SET한다. schedule/credits key가 없을 때는 RDS에서 한 번에 조회 후 SET한다. lock key가 없을 때는 잠금이 없는 것으로 간주하여 정상 신청을 허용한다. refresh token key가 없을 때는 재로그인을 요청한다.
+Redis 서버가 재시작되더라도 AOF로 전체 데이터를 복원한다. enrollment key가 없을 때는 RDS COUNT 쿼리로 자동 복구 후 SET한다. schedule/credits(학생) key가 없을 때는 RDS에서 한 번에 조회 후 SET한다. lock key가 없을 때는 잠금이 없는 것으로 간주하여 정상 신청을 허용한다. refresh token key가 없을 때는 재로그인을 요청한다. `course:{id}:credits/name/schedules` key가 없으면 자동 복구 로직이 없고 `COURSE_NOT_FOUND`로 응답한다 (강의 등록 시 SET이 항상 같이 이뤄지므로 정상 경로에서는 발생하지 않는다).

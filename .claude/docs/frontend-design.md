@@ -26,6 +26,8 @@ src/
 │   ├── enrollment/
 │   ├── waitlist/
 │   ├── notification/
+│   ├── professor/
+│   ├── student/
 │   └── admin/
 ├── shared/
 │   ├── api/         # axios 인스턴스, interceptor
@@ -57,22 +59,26 @@ src/
 
 ### Refresh Token — httpOnly Cookie
 
-- 백엔드가 `Set-Cookie`로 내려줌 (`HttpOnly`, `Path=/api/v1/auth/refresh`)
+- 백엔드가 `Set-Cookie`로 내려줌 (`HttpOnly`, `Secure`, `Path=/api/v1/auth`)
+- Path를 `/refresh` 한정이 아니라 `/api/v1/auth` 전체로 잡아 signup/login/logout 등 인증 관련 요청에서도 쿠키가 전송됨
 - JS에서 접근 불가 → XSS 안전
-- `/auth/refresh` 요청 시 브라우저가 자동 전송
+- `/api/v1/auth/**` 요청 시 브라우저가 자동 전송
 
 ---
 
 ## Silent Refresh
 
-앱 최초 진입 시 access token이 없으면 `/auth/refresh`를 자동 호출하여 복구한다. 실패하면 로그인 페이지로 이동한다.
+앱 최초 진입 시 access token이 없으면 `/auth/refresh`를 자동 호출하여 복구한다. 이 호출 자체는 실패를 삼키고 `ready=true`만 세팅하며(`App.tsx`), 실제 로그인 페이지 이동은 인증이 필요한 라우트에 접근할 때 `PrivateRoute`가 accessToken 부재를 보고 처리한다 — 즉 "새로고침 복구 시도"와 "미인증 시 리다이렉트"가 서로 다른 컴포넌트 책임으로 분리되어 있다.
 
 ```
 앱 진입
 └── Zustand store에 accessToken 있음 → 정상 진행
-└── 없음 → POST /auth/refresh 호출
+└── 없음 → POST /auth/refresh 호출 (App.tsx)
     ├── 성공 → accessToken store에 저장 후 진행
-    └── 실패 (401) → 로그인 페이지로 이동
+    └── 실패 → 조용히 무시, ready=true만 세팅 (여기서 리다이렉트 안 함)
+
+라우트 접근 시
+└── PrivateRoute가 accessToken 없으면 → 로그인 페이지로 이동
 ```
 
 ---

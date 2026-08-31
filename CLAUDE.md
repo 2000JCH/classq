@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 아키텍처
 
-ClassQ는 대학교 수강신청 시스템이다. 핵심 설계 목표는 수강신청 폭주 구간에서 RDS 부하를 제거하는 것이다. 학생이 응답을 기다리는 동기 구간은 Redis만 사용하고, RDS 쓰기는 Kafka Consumer를 통해 비동기로 처리한다.
+ClassQ는 대학교 수강신청 시스템이다. 핵심 설계 목표는 수강신청 폭주 구간에서 RDS 부하를 제거하는 것이다. 학생이 응답을 기다리는 동기 구간은 캐시가 준비된 경우 RDS 없이 Redis 연산과 Kafka 발행 확인만으로 처리하며(캐시 미스 시에만 최초 1회 RDS 폴백), RDS 쓰기는 Kafka Consumer를 통해 비동기로 처리한다.
 
 ### 패키지 구조
 
@@ -76,12 +76,12 @@ org.classq
 
 ### 수강신청 핵심 플로우
 
-**동기 구간 (Redis만 사용, 학생이 응답 대기):**
+**동기 구간 (캐시 히트 시 RDS 미사용 — Redis 연산 + Kafka 발행 확인, 학생이 응답 대기; 2·3번은 캐시 미스 시 최초 1회만 RDS 폴백):**
 1. `lock:course:{id}` 확인 → 잠금 있으면 거절
 2. `schedule:student:{id}` 시간표 중복 체크 (캐시 없으면 RDS 조회 후 저장)
 3. `credits:student:{id}` 19학점 초과 체크 (캐시 없으면 RDS 조회 후 저장)
 4. `DECR enrollment:course:{id}` → 음수면 `INCR` 롤백 후 거절
-5. Kafka `enrollment-events` 발행 (acks=all)
+5. Kafka `enrollment-events` 발행 (acks=all) → `.get(5, TimeUnit.SECONDS)`로 ack 대기, 타임아웃/예외 시 `INCR` 롤백 후 거절 — 단, 타임아웃은 "ack를 못 받았다"는 뜻이지 "브로커에 저장 안 됐다"는 확정이 아니다. ack만 늦게 도착한 경우 Consumer가 정상 처리해버릴 수 있어 정원초과 여지가 있음 (멱등성/보상 로직 미구현, 알려진 리스크)
 6. 성공 응답 반환
 
 **비동기 구간 (Kafka Consumer):**
@@ -95,7 +95,7 @@ org.classq
 |---|---|---|
 | `enrollment:course:{id}` | 강의 등록 (= capacity) | 없음 |
 | `waitlist:course:{id}` | 강의 등록 (= waitlist_limit) | 없음 |
-| `lock:course:{id}` | 대기자 처리 시작 시 | 없음 (Scheduler가 직접 해제) |
+| `lock:course:{id}` | 대기자 처리 시작 시 | 15분 (안전망, 기본적으로는 Scheduler/Consumer가 직접 해제) |
 | `schedule:student:{id}` | 첫 수강신청 시 (RDS에서 로드) | 없음 |
 | `credits:student:{id}` | 첫 수강신청 시 (RDS에서 로드) | 없음 |
 | `refresh:token:{accountId}` | 로그인 시 | 7일 |

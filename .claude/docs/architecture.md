@@ -2,7 +2,7 @@
 
 ## 설계 목표
 
-수강신청 폭주 구간에서 RDS 부하를 제거하는 것이 핵심 목표다. 이를 위해 학생이 기다리는 동기 구간에서는 Redis만 사용하여 잔여 자리를 확보하고, RDS 쓰기는 Kafka를 통해 비동기로 처리한다. Debezium은 교수의 강의 변경(정원 변경, 폐강)을 감지하여 Kafka로 이벤트를 발행하며, Consumer가 대기자 알림과 Redis 갱신을 처리한다.
+수강신청 폭주 구간에서 RDS 부하를 제거하는 것이 핵심 목표다. 이를 위해 학생이 기다리는 동기 구간에서는 RDS를 사용하지 않고 Redis로 잔여 자리를 확보한 뒤 Kafka 발행 확인까지만 수행하며, RDS 쓰기는 Kafka Consumer를 통해 비동기로 처리한다. Debezium은 교수의 강의 변경(정원 변경, 폐강)을 감지하여 Kafka로 이벤트를 발행하며, Consumer가 대기자 알림과 Redis 갱신을 처리한다.
 
 ---
 
@@ -40,28 +40,36 @@
 
 ### 동기 구간 — 학생이 응답을 기다리는 구간
 
-동기 구간에서 RDS를 완전히 제거한 이유는 수강신청 폭주 시 RDS가 병목이 되기 때문이다. Redis의 원자적 연산(DECR)을 사용하여 동시성 문제 없이 잔여 자리를 처리하고, Kafka에 이벤트를 발행한 후 즉시 학생에게 응답한다.
+동기 구간에서 RDS를 완전히 제거한 이유는 수강신청 폭주 시 RDS가 병목이 되기 때문이다. Redis의 원자적 연산(DECR)을 사용하여 동시성 문제 없이 잔여 자리를 처리하고, Kafka에 이벤트를 발행한 뒤 브로커 ack까지 확인한 후 학생에게 응답한다.
 
 ```
 1. 학생 수강신청 요청 (POST /api/v1/enrollments)
    └── JWT 인증 확인
 
-2. Redis 체크 (순서대로 수행)
+2. Redis 조회 (선행 — 캐시 미스 시 즉시 오류 응답, RDS 폴백 없음)
+   ├── student:account:{accountId} → studentId
+   │   → 없으면 STUDENT_NOT_FOUND (종료)
+   └── course:{id}:credits → 신청 강의 학점
+       → 없으면 COURSE_NOT_FOUND (종료)
+
+3. Redis 체크 (순서대로 수행)
    ├── lock:course:{id} 확인
    │   → 잠금 있으면 "대기자 처리 중" 응답 (종료)
-   ├── schedule:student:{id} 확인
+   ├── course:{id}:schedules + schedule:student:{id} 비교
    │   → 시간표 중복이면 거절 (종료)
-   │   → 캐시 없으면 RDS 조회 후 저장
+   │   → schedule:student:{id} 캐시 없으면 RDS 조회 후 저장
    ├── credits:student:{id} 확인
    │   → 19학점 초과면 거절 (종료)
    │   → 캐시 없으면 RDS 조회 후 저장
    └── DECR enrollment:course:{id}
        → 음수면 INCR 롤백 후 "마감됨" 응답 (종료)
 
-3. Kafka Producer 발행 (acks=all)
+4. Kafka Producer 발행 (acks=all)
    └── topic: enrollment-events
+   └── .get(5, TimeUnit.SECONDS)로 동기 확인
+       → 타임아웃/실패 시 DECR했던 잔여 자리 INCR 롤백 후 오류 응답 (종료)
 
-4. "신청 완료" 응답 → 학생에게 즉시 전달
+5. "신청 완료" 응답 → 학생에게 즉시 전달
 ```
 
 ### 비동기 구간 — 학생 응답 이후 처리
@@ -103,6 +111,8 @@ Kafka 브로커까지 이벤트가 도달하면 유실이 없다. Consumer가 RD
 
 3. Kafka Producer 직접 발행
    └── topic: enrollment-cancel-events
+   └── .get(5, TimeUnit.SECONDS)로 동기 확인
+       → 타임아웃/실패 시 2번에서 갱신한 Redis 값 원복 후 오류 응답 (종료)
 
 4. "취소 완료" 응답 → 학생에게 즉시 전달
 
@@ -148,8 +158,10 @@ Kafka 브로커까지 이벤트가 도달하면 유실이 없다. Consumer가 RD
 
 자리가 생기면 즉시 잠금을 세팅하여 다른 학생의 신청을 막고, 순번 1번 대기자에게 알림을 발송한다. 10분 내 미수락 시 Scheduler가 다음 순번으로 넘기며, 더 이상 대기자가 없으면 잠금을 해제한다.
 
+자리가 생기는 경로는 3가지(수강 취소 / 대기자 만료·거절·수락실패 / 교수의 정원 증가)이며, 셋 다 `waitlist-promote-events` 발행 또는 EnrollmentCancelConsumer의 동일 로직으로 수렴해 순서 보장을 Kafka 단일 파티션에 맡긴다.
+
 ```
-[자리 발생 시 — EnrollmentCancelConsumer / WaitlistPromoteConsumer]
+[자리 발생 시 — EnrollmentCancelConsumer(취소) / WaitlistPromoteConsumer(만료·거절·정원증가)]
 1. DB ORDER BY rank ASC로 첫 번째 WAITING 대기자 조회
    ├── 대기자 있음
    │   ├── SET lock:course:{id} (TTL 15분)
@@ -174,19 +186,22 @@ Kafka 브로커까지 이벤트가 도달하면 유실이 없다. Consumer가 RD
        ├── Redis DECR enrollment:course:{id}
        ├── Kafka enrollment-events 발행 → 일반 수강신청 흐름과 동일
        └── DEL lock:course:{id}
+
+[교수가 정원 증가 시 — CourseService.updateCourse]
+4. request.capacity > 기존 capacity면 afterCommit에서
+   waitlist-promote-events Kafka 발행 (courseId만 담아 위임)
+   → WaitlistPromoteConsumer가 1번과 동일한 로직으로 다음 순번 조회/알림
 ```
 
 ---
 
 ## Kafka 구성
 
-| 항목 | 내용 |
-|---|---|
 | 토픽 | 파티션 수 | 발행 주체 |
 |---|---|---|
 | `enrollment-events` | 3 | 애플리케이션 |
 | `enrollment-cancel-events` | 1 | 애플리케이션 |
-| `waitlist-promote-events` | 1 | 애플리케이션 (`expireAndPromoteNext`) |
+| `waitlist-promote-events` | 1 | 애플리케이션 (`WaitlistService.expireAndPromoteNext`, `CourseService.updateCourse` 정원증가 시) |
 | `course-events` | 1 | Debezium CDC |
 | `enrollment-dead-letter` | 1 | Consumer 재시도 실패 |
 
@@ -208,7 +223,8 @@ Prometheus는 애플리케이션 레벨 메트릭(API 응답시간, Kafka Consum
 |---|---|
 | Redis 서버 재시작 | AOF로 전체 데이터 복원 |
 | enrollment key 없음 | RDS COUNT 쿼리로 자동 복구 후 SET |
-| schedule/credits key 없음 | RDS에서 한 번에 조회 후 SET |
+| schedule/credits(학생) key 없음 | RDS에서 한 번에 조회 후 SET |
+| course:{id}:credits/name/schedules, student:account:{id} key 없음 | 자동 복구 없음 — COURSE_NOT_FOUND/STUDENT_NOT_FOUND로 즉시 거절 (강의 등록·로그인 시 항상 SET되므로 정상 경로에선 발생하지 않음) |
 | lock key 없음 | 잠금 없는 것으로 간주, 정상 신청 허용 |
 | refresh token key 없음 | 재로그인 요청 |
 

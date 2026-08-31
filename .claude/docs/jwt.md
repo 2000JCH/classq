@@ -28,7 +28,7 @@ ClassQ는 JWT(JSON Web Token) 기반 Stateless 인증을 사용한다. 세션을
 - 백엔드가 로그인 응답 시 `Set-Cookie` 헤더로 내려줌
 - JS에서 `document.cookie`로 접근 불가 → XSS 탈취 불가
 - `/auth/refresh` 호출 시 브라우저가 자동으로 쿠키를 담아 전송
-- Cookie 설정: `HttpOnly; Path=/api/v1/auth/refresh; SameSite=Strict; Max-Age=604800`
+- Cookie 설정: `HttpOnly; Secure; Path=/api/v1/auth; SameSite=Strict; Max-Age=604800` (Path는 `/refresh` 한정이 아니라 `/api/v1/auth` 전체 — signup/login/logout에서도 쿠키가 전송됨)
 
 **프론트엔드 흐름:**
 ```
@@ -97,17 +97,33 @@ jwt:
 ### SecurityConfig
 
 ```java
+.exceptionHandling(ex -> ex
+    .authenticationEntryPoint(authenticationEntryPoint())   // 인증 실패 → {code,message} JSON
+    .accessDeniedHandler(accessDeniedHandler())              // 인가 실패 → {code,message} JSON
+)
 .authorizeHttpRequests(auth -> auth
     .requestMatchers("/api/v1/auth/**").permitAll()   // 인증 불필요
+    .requestMatchers("/api/v1/departments").permitAll()
+    .requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
     .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+    .requestMatchers(HttpMethod.POST, "/api/v1/courses").hasRole("PROFESSOR")
+    .requestMatchers(HttpMethod.PUT, "/api/v1/courses/**").hasRole("PROFESSOR")
+    .requestMatchers(HttpMethod.DELETE, "/api/v1/courses/**").hasRole("PROFESSOR")
+    .requestMatchers("/api/v1/professors/**").hasRole("PROFESSOR")
+    .requestMatchers("/api/v1/students/**").hasRole("STUDENT")
+    .requestMatchers("/api/v1/enrollments/**").hasRole("STUDENT")
+    .requestMatchers("/api/v1/waitlists/**").hasRole("STUDENT")
     .anyRequest().authenticated()
 )
 .addFilterBefore(new JwtFilter(jwtUtil), UsernamePasswordAuthenticationFilter.class)
 ```
 
-- `/api/v1/auth/**` — 인증 없이 접근 가능 (signup, login, refresh)
+- `/api/v1/auth/**`, `/api/v1/departments`, `/actuator/health`, `/actuator/prometheus` — 인증 없이 접근 가능
 - `/api/v1/admin/**` — ADMIN 권한 필요
-- 나머지 — 인증 필요
+- 강의 생성/수정/폐강, `/api/v1/professors/**` — PROFESSOR 권한 필요
+- 수강신청/대기자, `/api/v1/students/**` — STUDENT 권한 필요
+- 나머지 — 인증만 필요 (역할 불문)
+- 역할 체크는 `hasRole()`이 JWT의 `role` 클레임(`JwtFilter`가 `ROLE_{role}` authority로 변환)을 기준으로 필터 체인 단계에서 강제한다 — 서비스 레이어의 "해당 역할 엔티티 없으면 404" 같은 우발적 차단에 의존하지 않는다.
 
 ### JwtUtil
 
@@ -116,6 +132,7 @@ jwt:
 | `createAccessToken(accountId, role)` | access token 생성 |
 | `createRefreshToken(accountId)` | refresh token 생성 |
 | `validateToken(token)` | 서명 유효성 + 만료 여부 검증 |
+| `isTokenExpired(token)` | 서명은 유효한데 `exp`만 지난 경우인지 확인 (TOKEN_EXPIRED와 그 외 무효 토큰 구분용) |
 | `isAccessToken(token)` | `typ` 클레임이 `"access"`인지 확인 |
 | `isRefreshToken(token)` | `typ` 클레임이 `"refresh"`인지 확인 |
 | `getAccountId(token)` | `sub` 클레임에서 accountId 추출 |
@@ -128,14 +145,17 @@ jwt:
 
 ```
 1. Authorization 헤더에서 Bearer 토큰 추출 (extractToken)
-2. validateToken() → 서명 유효 + 만료 여부 확인
-3. isAccessToken() → typ = "access" 확인
-4. 통과 시 SecurityContextHolder에 인증 정보 저장
-   - principal: accountId (Long)
-   - authorities: ROLE_{role}
+2. validateToken() && isAccessToken() 모두 true
+   → SecurityContextHolder에 인증 정보 저장
+     - principal: accountId (Long)
+     - authorities: ROLE_{role}
+3. 위 조건 실패 + isTokenExpired() == true
+   → 요청 속성 classq.tokenExpired = true 세팅 (인증 정보는 저장 안 함)
+4. 필터는 그대로 통과시키고, 인증이 필요한 리소스면 이후 AuthenticationEntryPoint가
+   classq.tokenExpired 여부로 TOKEN_EXPIRED vs UNAUTHORIZED를 구분해 응답
 ```
 
-refresh token을 일반 API에 사용하면 `isAccessToken()`에서 false가 반환되어 인증이 거부된다.
+refresh token을 일반 API에 사용하면 `isAccessToken()`에서 false가 반환되어 인증이 거부된다. `isTokenExpired()`는 서명은 유효한데 `exp`만 지난 경우(`ExpiredJwtException`)만 true를 반환하므로, 위변조·타입 오류 등 다른 무효 사유와는 구분된다.
 
 ---
 
@@ -150,7 +170,7 @@ refresh token을 일반 API에 사용하면 `isAccessToken()`에서 false가 반
 4. Redis SET refresh:token:{accountId} = refreshToken (TTL 7일)
 5. 응답:
    - response body: { accessToken }
-   - Set-Cookie: refreshToken={refreshToken}; HttpOnly; Path=/api/v1/auth/refresh; SameSite=Strict; Max-Age=604800
+   - Set-Cookie: refreshToken={refreshToken}; HttpOnly; Secure; Path=/api/v1/auth; SameSite=Strict; Max-Age=604800
 ```
 
 ### Access Token 재발급 (`POST /api/v1/auth/refresh`)
@@ -190,11 +210,11 @@ Redis 장애로 key가 없을 경우 재로그인을 요청한다.
 
 | 코드 | HTTP | 상황 |
 |---|---|---|
-| `INVALID_TOKEN` | 401 | 위변조·형식 오류·잘못된 토큰 타입 (만료 포함, TOKEN_EXPIRED와 통합 처리) |
-| `TOKEN_EXPIRED` | 401 | 만료된 토큰 — enum 정의됨, 현재는 INVALID_TOKEN으로 통합 반환 |
-| `UNAUTHORIZED` | 401 | Redis 토큰 불일치, 계정 미존재 |
+| `INVALID_TOKEN` | 401 | `/auth/refresh` 요청 시 refresh token이 위변조·형식오류·잘못된 타입인 경우 |
+| `TOKEN_EXPIRED` | 401 | 만료된 access token으로 요청 — `JwtFilter`+`AuthenticationEntryPoint`가 UNAUTHORIZED와 구분해서 응답 |
+| `UNAUTHORIZED` | 401 | access token 없음/서명 무효 등 그 외 인증 실패, Redis refresh 토큰 불일치, 계정 미존재 |
 | `LOGIN_FAILED` | 401 | 이메일 또는 비밀번호 불일치 |
-| `FORBIDDEN` | 403 | 권한 없는 접근 (ADMIN 역할 직접 할당 시도 등) |
+| `FORBIDDEN` | 403 | 인증은 됐지만 역할이 맞지 않는 접근 (예: STUDENT가 강의 생성 API 호출) — `SecurityConfig`의 `hasRole()` 매칭 실패 시 `AccessDeniedHandler`가 응답. ADMIN 역할 직접 할당 시도 등 서비스 레이어 차단도 동일 코드 사용 |
 
 ---
 

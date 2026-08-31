@@ -99,9 +99,6 @@ public class WaitlistFlowSimulation extends Simulation {
             jedis.set("enrollment:course:" + COURSE_ID, "0");
             jedis.set("waitlist:course:" + COURSE_ID, String.valueOf(WAITLIST_LIMIT));
 
-            // ZSET 초기화 (이전 테스트 잔여 순번 데이터 제거)
-            jedis.del("waitlist:zset:course:" + COURSE_ID);
-
             String cursor = "0";
             do {
                 var result = jedis.scan(cursor, new ScanParams().match("credits:student:*").count(200));
