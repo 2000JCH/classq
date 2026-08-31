@@ -34,13 +34,13 @@ Redis로 잔여 자리를 빠르게 확보하고, Kafka로 후속 DB 처리를 �
 
 수강신청 요청은 동기 구간과 비동기 구간으로 분리된다.
 
-**동기 구간** — 학생이 응답을 기다리는 구간으로 RDS 조회 없이 Redis만 사용한다.
+**동기 구간** — 학생이 응답을 기다리는 구간으로, 캐시가 준비된 경우 RDS 조회 없이 Redis만 사용한다(3·4번은 캐시 미스 시 최초 1회만 RDS 폴백).
 1. studentId·강의 학점 조회 (student:account:{id}, course:{id}:credits)
 2. 잠금 확인 (lock:course:{id})
-3. 시간표 중복 체크 (course:{id}:schedules ↔ schedule:student:{id})
-4. 학점 초과 체크 (credits:student:{id})
+3. 시간표 중복 체크 (course:{id}:schedules ↔ schedule:student:{id}, 캐시 없으면 RDS 조회 후 저장)
+4. 학점 초과 체크 (credits:student:{id}, 캐시 없으면 RDS 조회 후 저장)
 5. 잔여 자리 차감 (DECR enrollment:course:{id})
-6. Kafka 이벤트 발행(acks=all, 동기 확인) 후 즉시 응답
+6. Kafka 이벤트 발행(acks=all) → ack 대기, 타임아웃 시 롤백 (타임아웃이 브로커 미저장을 확정하진 않음) 후 즉시 응답
 
 **비동기 구간** — Kafka Consumer가 RDS INSERT 및 Redis 캐시 갱신을 처리한다.
 
