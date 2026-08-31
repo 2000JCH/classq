@@ -15,30 +15,22 @@ import org.classq.domain.course.repository.CourseRepository;
 import org.classq.domain.course.repository.CourseScheduleRepository;
 import org.classq.domain.department.entity.Department;
 import org.classq.domain.department.repository.DepartmentRepository;
-import org.classq.domain.notification.entity.Notification;
-import org.classq.domain.notification.entity.NotificationType;
-import org.classq.domain.notification.repository.NotificationRepository;
-import org.classq.domain.notification.service.SseEmitterService;
 import org.classq.domain.professor.entity.Professor;
 import org.classq.domain.professor.repository.ProfessorRepository;
-import org.classq.domain.waitlist.entity.Waitlist;
-import org.classq.domain.waitlist.entity.WaitlistStatus;
-import org.classq.domain.waitlist.repository.WaitlistRepository;
+import org.classq.domain.waitlist.producer.dto.WaitlistPromoteEvent;
 import org.classq.global.exception.BusinessException;
 import org.classq.global.exception.ErrorCode;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -48,10 +40,8 @@ public class CourseService {
     private final CourseScheduleRepository courseScheduleRepository;
     private final ProfessorRepository professorRepository;
     private final DepartmentRepository departmentRepository;
-    private final WaitlistRepository waitlistRepository;
-    private final NotificationRepository notificationRepository;
-    private final SseEmitterService sseEmitterService;
     private final RedisTemplate<String, String> redisTemplate;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     // 강의 목록 조회
     @Transactional(readOnly = true)
@@ -138,6 +128,13 @@ public class CourseService {
             public void afterCommit() {
                 redisTemplate.opsForValue().set("enrollment:course:" + savedCourseId, String.valueOf(request.getCapacity()));
                 redisTemplate.opsForValue().set("waitlist:course:" + savedCourseId, String.valueOf(request.getWaitlistLimit()));
+                redisTemplate.opsForValue().set("course:" + savedCourseId + ":credits", String.valueOf(request.getCredits()));
+                if (request.getSchedules() != null) {
+                    for (CourseCreateRequestDto.ScheduleRequest s : request.getSchedules()) {
+                        redisTemplate.opsForSet().add("course:" + savedCourseId + ":schedules",
+                                s.getDay().name() + "|" + s.getStartTime() + "|" + s.getEndTime());
+                    }
+                }
             }
         });
 
@@ -196,51 +193,16 @@ public class CourseService {
             }
         });
 
-        // 교수가 정원 증가 시 대기자 알림
+        // 교수가 정원 증가 시 대기자 프로모션 — 취소 경로와 동일하게 Kafka 단일 파티션(waitlist-promote-events)에 위임
+        // (알림 대상 조회/중복 방지/락 세팅은 전부 WaitlistPromoteConsumer가 담당)
         if (request.getCapacity() > oldCapacity) {
-            boolean alreadyNotified = waitlistRepository
-                    .findFirstByCourse_IdAndWaitlistStatusAndDeletedAtIsNullOrderByRankAsc(courseId, WaitlistStatus.NOTIFIED)
-                    .isPresent();
-
-            if (!alreadyNotified) {
-                // ZSET 상위 후보를 순서대로 검증해 첫 유효 WAITING 대기자 선택 (stale member 건너뜀)
-                Set<String> candidates = redisTemplate.opsForZSet().range("waitlist:zset:course:" + courseId, 0, 2);
-                Optional<Waitlist> nextOpt = Optional.empty();
-                if (candidates != null) {
-                    for (String id : candidates) {
-                        Optional<Waitlist> candidate = waitlistRepository.findByIdForUpdate(Long.valueOf(id))
-                                .filter(w -> w.getWaitlistStatus() == WaitlistStatus.WAITING && w.getDeletedAt() == null);
-                        if (candidate.isPresent()) {
-                            nextOpt = candidate;
-                            break;
-                        }
-                    }
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    kafkaTemplate.send("waitlist-promote-events", String.valueOf(courseId),
+                            new WaitlistPromoteEvent(courseId));
                 }
-
-                if (nextOpt.isPresent()) {
-                    Waitlist waitlist = nextOpt.get();
-                    waitlist.notified();
-
-                    Notification notification = notificationRepository.save(
-                            Notification.builder()
-                                    .student(waitlist.getStudent())
-                                    .course(waitlist.getCourse())
-                                    .notificationType(NotificationType.WAITLIST_AVAILABLE)
-                                    .message("수강 신청 자리가 생겼습니다. 10분 내에 수락해 주세요.")
-                                    .build()
-                    );
-
-                    Long studentId = waitlist.getStudent().getId();
-
-                    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                        @Override
-                        public void afterCommit() {
-                            redisTemplate.opsForValue().set("lock:course:" + courseId, "1", 15, TimeUnit.MINUTES);
-                            sseEmitterService.send(studentId, notification);
-                        }
-                    });
-                }
-            }
+            });
         }
     }
 
